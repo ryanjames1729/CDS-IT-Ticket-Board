@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carolina Day School — IT Ticket Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f4f8; color: #1a202c; }
+
+  header {
+    background: linear-gradient(135deg, #1e3a5f 0%, #2d6a9f 100%);
+    color: white; padding: 20px 32px; display: flex; align-items: center; justify-content: space-between;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+  header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: 0.3px; }
+  header p { font-size: 0.82rem; opacity: 0.8; margin-top: 3px; }
+  .refresh-btn {
+    background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+    color: white; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.85rem;
+    transition: background 0.2s;
+  }
+  .refresh-btn:hover { background: rgba(255,255,255,0.25); }
+
+  .main { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
+
+  /* Summary Cards */
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .card {
+    background: white; border-radius: 12px; padding: 20px 24px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08); border-left: 4px solid;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .card.blue  { border-color: #2d6a9f; }
+  .card.green { border-color: #38a169; }
+  .card.red   { border-color: #e53e3e; }
+  .card.orange{ border-color: #dd6b20; }
+  .card .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.8px; color: #718096; font-weight: 600; }
+  .card .value { font-size: 2.2rem; font-weight: 800; line-height: 1; }
+  .card.blue  .value { color: #2d6a9f; }
+  .card.green .value { color: #38a169; }
+  .card.red   .value { color: #e53e3e; }
+  .card.orange .value { color: #dd6b20; }
+  .card .sub  { font-size: 0.78rem; color: #a0aec0; }
+
+  /* Chart grid */
+  .charts-row { display: grid; gap: 16px; margin-bottom: 16px; }
+  .row-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .row-2 { grid-template-columns: 1.6fr 1fr; }
+  .row-2b { grid-template-columns: 1fr 1.6fr; }
+
+  .chart-card {
+    background: white; border-radius: 12px; padding: 20px 24px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  .chart-card h3 {
+    font-size: 0.85rem; font-weight: 700; color: #4a5568; text-transform: uppercase;
+    letter-spacing: 0.6px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+  }
+  .chart-card h3 .badge {
+    background: #edf2f7; color: #718096; padding: 2px 8px; border-radius: 20px; font-size: 0.7rem;
+  }
+  .chart-wrap { position: relative; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+  .tab {
+    padding: 7px 16px; border-radius: 8px; font-size: 0.82rem; font-weight: 600;
+    cursor: pointer; border: none; background: #edf2f7; color: #718096; transition: all 0.15s;
+  }
+  .tab.active { background: #2d6a9f; color: white; }
+
+  /* Table */
+  .table-card { background: white; border-radius: 12px; padding: 20px 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 16px; }
+  .table-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .table-header h3 { font-size: 0.85rem; font-weight: 700; color: #4a5568; text-transform: uppercase; letter-spacing: 0.6px; }
+  .search-box { padding: 7px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.83rem; width: 240px; outline: none; }
+  .search-box:focus { border-color: #2d6a9f; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  th { background: #f7fafc; color: #718096; font-weight: 700; padding: 10px 12px; text-align: left; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.5px; border-bottom: 2px solid #e2e8f0; }
+  td { padding: 10px 12px; border-bottom: 1px solid #f0f4f8; vertical-align: middle; color: #2d3748; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f7fafc; }
+
+  .badge-status { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; }
+  .s-inprogress  { background: #bee3f8; color: #2b6cb0; }
+  .s-assigned    { background: #c6f6d5; color: #276749; }
+  .s-reassign    { background: #feebc8; color: #c05621; }
+  .s-waiting     { background: #e9d8fd; color: #553c9a; }
+  .s-child       { background: #e2e8f0; color: #4a5568; }
+  .s-pending     { background: #fefcbf; color: #744210; }
+  .s-new         { background: #c6f6d5; color: #276749; }
+
+  .badge-priority { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; }
+  .p-p1, .p-critical { background: #fed7d7; color: #c53030; }
+  .p-p2, .p-urgent   { background: #feebc8; color: #c05621; }
+  .p-p3, .p-high     { background: #fefcbf; color: #744210; }
+  .p-p4, .p-medium   { background: #c6f6d5; color: #276749; }
+  .p-low             { background: #e2e8f0; color: #4a5568; }
+  .p-nosla           { background: #e2e8f0; color: #718096; }
+
+  .source-tag { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 0.68rem; font-weight: 700; }
+  .src-cw { background: #bee3f8; color: #2c5282; }
+  .src-hf { background: #c6f6d5; color: #22543d; }
+
+  .pagination { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; align-items: center; }
+  .pagination button { padding: 5px 12px; border: 1px solid #e2e8f0; border-radius: 6px; background: white; cursor: pointer; font-size: 0.8rem; color: #4a5568; }
+  .pagination button:hover { background: #edf2f7; }
+  .pagination button.active { background: #2d6a9f; color: white; border-color: #2d6a9f; }
+  .pg-info { font-size: 0.78rem; color: #718096; }
+
+  footer { text-align: center; padding: 20px; color: #a0aec0; font-size: 0.75rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🖥️ Carolina Day School — IT Ticket Dashboard</h1>
+    <p id="last-updated">Data as of March 18, 2026 · HappyFox + ConnectWise</p>
+  </div>
+  <button class="refresh-btn" onclick="alert('To refresh: reopen this file after running Claude again with both portals open.')">↻ Refresh</button>
+</header>
+
+<div class="main">
+
+  <!-- Deduplication Banner -->
+  <div style="background:white;border-radius:12px;padding:14px 20px;margin-bottom:12px;border-left:4px solid #2d6a9f;box-shadow:0 1px 4px rgba(0,0,0,0.08);display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+    <span style="font-size:1.1rem">🔗</span>
+    <div>
+      <strong style="color:#2d3748;font-size:0.88rem;">Contextual deduplication applied:</strong>
+      <span style="color:#718096;font-size:0.84rem;"> Exact + fuzzy title matching found 60 duplicate entries across both systems. Counts below reflect unique issues only.</span>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:20px;flex-shrink:0;">
+      <div style="text-align:center">
+        <div style="font-size:1.1rem;font-weight:800;color:#2d6a9f;">53</div>
+        <div style="font-size:0.68rem;color:#a0aec0;text-transform:uppercase;letter-spacing:0.5px;">CW Unique</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:1.1rem;font-weight:800;color:#38a169;">81</div>
+        <div style="font-size:0.68rem;color:#a0aec0;text-transform:uppercase;letter-spacing:0.5px;">HF Unique</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:1.1rem;font-weight:800;color:#805ad5;">18</div>
+        <div style="font-size:0.68rem;color:#a0aec0;text-transform:uppercase;letter-spacing:0.5px;">In Both</div>
+      </div>
+      <div style="text-align:center;border-left:2px solid #e2e8f0;padding-left:20px;">
+        <div style="font-size:1.3rem;font-weight:800;color:#1a202c;">134</div>
+        <div style="font-size:0.68rem;color:#a0aec0;text-transform:uppercase;letter-spacing:0.5px;">Unique Total</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Duplicate Analysis Section -->
+  <div style="background:white;border-radius:12px;padding:18px 24px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+    <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.querySelector('.toggle').textContent=this.nextElementSibling.style.display==='none'?'▶ Show':'▼ Hide'">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:1rem">🔍</span>
+        <strong style="color:#2d3748;font-size:0.88rem;">Duplicate Group Analysis</strong>
+        <span style="background:#edf2f7;color:#718096;padding:2px 9px;border-radius:20px;font-size:0.72rem;font-weight:700;">12 groups · 60 extra entries removed</span>
+      </div>
+      <span class="toggle" style="font-size:0.8rem;color:#718096;">▶ Show</span>
+    </div>
+    <div style="display:none;margin-top:16px;">
+      <div style="margin-bottom:10px;font-size:0.78rem;color:#718096;">Similarity threshold: 45% Jaccard token overlap. Each group below represents one unique issue with multiple ticket entries.</div>
+
+      <div style="font-size:0.8rem;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">ConnectWise — 6 groups, 54 duplicate entries</div>
+      <table style="width:100%;border-collapse:collapse;font-size:0.8rem;margin-bottom:18px;">
+        <thead><tr style="background:#f7fafc;">
+          <th style="padding:8px 10px;text-align:left;color:#718096;font-size:0.72rem;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">Issue Theme</th>
+          <th style="padding:8px 10px;text-align:center;color:#718096;font-size:0.72rem;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">Entries</th>
+          <th style="padding:8px 10px;text-align:center;color:#718096;font-size:0.72rem;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">Extras</th>
+          <th style="padding:8px 10px;text-align:left;color:#718096;font-size:0.72rem;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">Note</th>
+        </tr></thead>
+        <tbody>
+          <tr style="border-bottom:1px solid #f0f4f8;"><td style="padding:8px 10px;">Replacement Speakers (WPS-7178)</td><td style="padding:8px 10px;text-align:center;"><strong style="color:#e53e3e;">34</strong></td><td style="padding:8px 10px;text-align:center;">33</td><td style="padding:8px 10px;color:#718096;">⚠️ Open since Aug 2025 — 8+ months</td></tr>
+          <tr style="border-bottom:1px solid #f0f4f8;"><td style="padding:8px 10px;">Broken Chromebook Screen Repair</td><td style="padding:8px 10px;text-align:center;"><strong style="color:#dd6b20;">17</strong></td><td style="padding:8px 10px;text-align:center;">16</td><td style="padding:8px 10px;color:#718096;">Different asset tags — could be 1 batch repair job</td></tr>
+          <tr style="border-bottom:1px solid #f0f4f8;"><td style="padding:8px 10px;">Screen Replacement (Asset Tag 3059)</td><td style="padding:8px 10px;text-align:center;">3</td><td style="padding:8px 10px;text-align:center;">2</td><td style="padding:8px 10px;color:#718096;"></td></tr>
+          <tr style="border-bottom:1px solid #f0f4f8;"><td style="padding:8px 10px;">External Calls Cannot Connect to CDS</td><td style="padding:8px 10px;text-align:center;">2</td><td style="padding:8px 10px;text-align:center;">1</td><td style="padding:8px 10px;color:#718096;"></td></tr>
+          <tr style="border-bottom:1px solid #f0f4f8;"><td style="padding:8px 10px;">Replace Battery (laptop)</td><td style="padding:8px 10px;text-align:center;">2</td><td style="padding:8px 10px;text-align:center;">1</td><td style="padding:8px 10px;color:#718096;"></td></tr>
+          <tr><td style="padding:8px 10px;">Replacement Speakers follow-up thread</td><td style="padding:8px 10px;text-align:center;">2</td><td style="padding:8px 10px;text-align:center;">1</td><td style="padding:8px 10px;color:#718096;">Related to WPS-7178</td></tr>
+        </tbody>
+      </table>
+
+      <div style="font-size:0.8rem;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">HappyFox — 6 groups, 6 duplicate entries</div>
+      <table style="width:100%;border-collapse:collapse;font-size:0.8rem;margin-bottom:18px;">
+        <thead><tr style="background:#f7fafc;">
+          <th style="padding:8px 10px;text-align:left;color:#718096;font-size:0.72rem;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">Issue Theme</th>
+          <th style="padding:8px 10px;text-align:center;color:#718096;font-size:0.72rem;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">Entries</th>
+          <th style="padding:8px 10px;text-align:left;color:#718096;font-size:0.72rem;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">Ticket IDs</th>
+        </tr></thead>
+        <tbody>
+          <tr style="border-bottom:1px solid #f0f4f8;"><td style="padding:8px 10px;">Computer issues (incl. Mailchimp)</td><td style="padding:8px 10px;text-align:center;">2</td><td style="padding:8px 10px;color:#718096;">IT00009869, IT00007561</td></tr>
+          <tr style="border-bottom:1px solid #f0f4f8;"><td style="padding:8px 10px;">Hudson Pettibone — cracked screen</td><td style="padding:8px 10px;text-align:center;">2</td><td style="padding:8px 10px;color:#718096;">IT00009857, IT00009674</td></tr>
+          <tr style="border-bottom:1px solid #f0f4f8;"><td style="padding:8px 10px;">Logging in from off campus</td><td style="padding:8px 10px;text-align:center;">2</td><td style="padding:8px 10px;color:#718096;">IT00009853, IT00009683</td></tr>
+          <tr style="border-bottom:1px solid #f0f4f8;"><td style="padding:8px 10px;">Google Meet audio</td><td style="padding:8px 10px;text-align:center;">2</td><td style="padding:8px 10px;color:#718096;">IT00009813, IT00009257</td></tr>
+          <tr style="border-bottom:1px solid #f0f4f8;"><td style="padding:8px 10px;">Broken Chromebook screen</td><td style="padding:8px 10px;text-align:center;">2</td><td style="padding:8px 10px;color:#718096;">IT00009375, IT00008868</td></tr>
+          <tr><td style="padding:8px 10px;">Printer / printing issue</td><td style="padding:8px 10px;text-align:center;">2</td><td style="padding:8px 10px;color:#718096;">Multiple</td></tr>
+        </tbody>
+      </table>
+
+      <div style="font-size:0.8rem;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">New Cross-System Fuzzy Matches — 2 additional (beyond 16 exact)</div>
+      <table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
+        <thead><tr style="background:#f7fafc;">
+          <th style="padding:8px 10px;text-align:left;color:#718096;font-size:0.72rem;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">HappyFox</th>
+          <th style="padding:8px 10px;text-align:left;color:#718096;font-size:0.72rem;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">ConnectWise</th>
+          <th style="padding:8px 10px;text-align:center;color:#718096;font-size:0.72rem;text-transform:uppercase;border-bottom:2px solid #e2e8f0;">Match %</th>
+        </tr></thead>
+        <tbody>
+          <tr style="border-bottom:1px solid #f0f4f8;"><td style="padding:8px 10px;">IT00009927 — Cursive Wizard App for every Chromebook</td><td style="padding:8px 10px;">CW-1160885 — Cursive Wizard App Chromebook</td><td style="padding:8px 10px;text-align:center;"><span style="background:#c6f6d5;color:#276749;padding:2px 8px;border-radius:20px;font-weight:700;">80%</span></td></tr>
+          <tr><td style="padding:8px 10px;">IT00009621 — Computer Login</td><td style="padding:8px 10px;">CW-1160820 — Computer login issues</td><td style="padding:8px 10px;text-align:center;"><span style="background:#fefcbf;color:#744210;padding:2px 8px;border-radius:20px;font-weight:700;">67%</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- WPS-7178 Alert -->
+  <div style="background:#fff5f5;border-radius:12px;padding:14px 20px;margin-bottom:20px;border-left:4px solid #e53e3e;box-shadow:0 1px 4px rgba(0,0,0,0.08);display:flex;align-items:center;gap:14px;">
+    <span style="font-size:1.2rem">⚠️</span>
+    <div>
+      <strong style="color:#c53030;font-size:0.88rem;">Long-running issue detected:</strong>
+      <span style="color:#742a2a;font-size:0.84rem;"> "WPS-7178 Re: Replacement Speakers" has generated <strong>34 ConnectWise entries</strong> dating back to August 2025 (8+ months unresolved). This single issue accounts for 32% of all CW ticket inflation.</span>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="cards">
+    <div class="card blue">
+      <div class="label">Unique Issues</div>
+      <div class="value">134</div>
+      <div class="sub">After exact + fuzzy deduplication</div>
+    </div>
+    <div class="card green">
+      <div class="label">HF-Only Tickets</div>
+      <div class="value">81</div>
+      <div class="sub">Not tracked in ConnectWise</div>
+    </div>
+    <div class="card red">
+      <div class="label">Critical / P2 Tickets</div>
+      <div class="value" id="critCount">—</div>
+      <div class="sub">Need immediate attention</div>
+    </div>
+    <div class="card orange">
+      <div class="label">CW Unassigned</div>
+      <div class="value">45</div>
+      <div class="sub">Awaiting assignment in CW</div>
+    </div>
+  </div>
+
+  <!-- Row 1: CW Status, CW Type, HF Priority -->
+  <div class="charts-row row-3">
+    <div class="chart-card">
+      <h3>CW — Ticket Status <span class="badge">76 unique · 107 total</span></h3>
+      <div class="chart-wrap" style="height:220px"><canvas id="cwStatusChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>CW — Incident vs Request <span class="badge">107 tickets</span></h3>
+      <div class="chart-wrap" style="height:220px"><canvas id="cwTypeChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>HF — Priority Breakdown <span class="badge">105 tickets</span></h3>
+      <div class="chart-wrap" style="height:220px"><canvas id="hfPriorityChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Row 2: CW Assignee (big), CW Priority -->
+  <div class="charts-row row-2b">
+    <div class="chart-card">
+      <h3>CW — Priority Distribution <span class="badge">107 tickets</span></h3>
+      <div class="chart-wrap" style="height:240px"><canvas id="cwPriorityChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>CW — Tickets by Assignee <span class="badge">top resources</span></h3>
+      <div class="chart-wrap" style="height:240px"><canvas id="cwAssigneeChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Row 3: Ticket age / backlog over time -->
+  <div class="charts-row" style="grid-template-columns: 1fr;">
+    <div class="chart-card">
+      <h3>CW — Open Ticket Backlog by Date Entered</h3>
+      <div class="chart-wrap" style="height:200px"><canvas id="cwAgeChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Ticket Table with tabs -->
+  <div class="table-card">
+    <div class="table-header">
+      <div style="display:flex;align-items:center;gap:16px">
+        <h3>Recent Tickets</h3>
+        <div class="tabs">
+          <button class="tab active" onclick="switchTab('cw', this)">ConnectWise (76 unique)</button>
+          <button class="tab" onclick="switchTab('hf', this)">HappyFox Only (89)</button>
+          <button class="tab" onclick="switchTab('linked', this)">🔗 Linked (18)</button>
+        </div>
+      </div>
+      <input class="search-box" type="text" id="tableSearch" placeholder="Search tickets…" oninput="filterTable()">
+    </div>
+    <div id="cwTable">
+      <table id="cwTicketTable">
+        <thead>
+          <tr>
+            <th>Ticket #</th>
+            <th>Summary</th>
+            <th>Type</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th>Assignee</th>
+            <th>Contact</th>
+            <th>Entered</th>
+          </tr>
+        </thead>
+        <tbody id="cwTableBody"></tbody>
+      </table>
+    </div>
+    <div id="hfTable" style="display:none">
+      <table id="hfTicketTable">
+        <thead>
+          <tr>
+            <th>Ticket ID</th>
+            <th>Title</th>
+            <th>Priority</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="hfTableBody"></tbody>
+      </table>
+    </div>
+    <div id="linkedTable" style="display:none">
+      <div style="background:#f7fafc;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.8rem;color:#4a5568;">
+        ℹ️ These 18 tickets appear in <strong>both</strong> HappyFox and ConnectWise (16 exact + 2 fuzzy matches). They are counted only once in the unique total of 134.
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>HF Ticket</th>
+            <th>CW Ticket</th>
+            <th>Title</th>
+            <th>HF Priority</th>
+            <th>CW Priority</th>
+            <th>CW Status</th>
+            <th>CW Assignee</th>
+          </tr>
+        </thead>
+        <tbody id="linkedTableBody"></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+</div>
+
+<footer>Carolina Day School IT Dashboard · Built from live HappyFox &amp; ConnectWise data · March 18, 2026</footer>
+
+<script>
+// ─── DATA ────────────────────────────────────────────────────────────────────
+
+const CW_TICKETS = [{"num":"1161018","summary":"Portable microphone and speaker? DUE 3-20-2026","type":"Request","priority":"P4","status":"Reassign Dispatcher","resources":"Unassigned","contact":"Becky Vlachoynnis","entered":"3/18/26"},{"num":"1161016","summary":"Printing and password","type":"Incident","priority":"P4","status":"Reassign Dispatcher","resources":"Scott Clark","contact":"Monica Antonazzo","entered":"3/18/26"},{"num":"1161014","summary":"Ipad request","type":"Request","priority":"P4","status":"Reassign Dispatcher","resources":"Scott Clark","contact":"Jennifer Taylor","entered":"3/18/26"},{"num":"1161012","summary":"printer","type":"Incident","priority":"P4","status":"Reassign Dispatcher","resources":"Scott Clark","contact":"Anne Scarbrough","entered":"3/18/26"},{"num":"1161009","summary":"PA speaker in weight room is not working","type":"Incident","priority":"P4","status":"Reassign Dispatcher","resources":"Scott Clark","contact":"Chris Atwater","entered":"3/18/26"},{"num":"1161000","summary":"Printing Woes","type":"Incident","priority":"P4","status":"Reassign Dispatcher","resources":"Scott Clark","contact":"Margee Husemann","entered":"3/18/26"},{"num":"1160994","summary":"Pickup IT testing equipment today from US 3-18-2026","type":"Incident","priority":"P4","status":"Reassign Dispatcher","resources":"Scott Clark","contact":"Sandy Pyeatt","entered":"3/18/26"},{"num":"1160993","summary":"Mic and audio setup for faculty and staff meeting @4pm","type":"Request","priority":"P4","status":"Reassign Dispatcher","resources":"Scott Clark","contact":"Brooke McIntosh","entered":"3/18/26"},{"num":"1160970","summary":"Enroll Michael Lomuscio's Verizon Phone in MDM","type":"Request","priority":"P2","status":"Reassign Dispatcher","resources":"Scott Clark","contact":"Michael Lomuscio","entered":"3/18/26"},{"num":"1160966","summary":"Auditorium speakers not working","type":"Incident","priority":"P4","status":"Assigned","resources":"Logan Buell","contact":"Anne Scarbrough","entered":"3/18/26"},{"num":"1160962","summary":"Urgent: Set up iPad by EOD 3/18","type":"Request","priority":"P4","status":"In Progress","resources":"Logan Buell","contact":"Ryan James","entered":"3/17/26"},{"num":"1160951","summary":"Badge Request","type":"Request","priority":"P4","status":"Reassign Dispatcher","resources":"Unassigned","contact":"Mylan Hutchins","entered":"3/18/26"},{"num":"1160923","summary":"Laptop won't connect to WiFi","type":"Incident","priority":"P3","status":"In Progress","resources":"Danielle Shackley","contact":"Staff Member","entered":"3/17/26"},{"num":"1160900","summary":"Poor WiFi Connection in Key 3rd grade","type":"Incident","priority":"P2","status":"In Progress","resources":"Logan Buell","contact":"Mary Jo van Dalen","entered":"3/17/26"},{"num":"1160885","summary":"Cursive Wizard App for every Chromebook","type":"Request","priority":"P3","status":"In Progress","resources":"Ryan James","contact":"Mary Jo van Dalen","entered":"3/17/26"},{"num":"1160850","summary":"Email forwarding setup","type":"Request","priority":"P4","status":"Child Ticket","resources":"Danielle Shackley","contact":"Admin Staff","entered":"3/16/26"},{"num":"1160820","summary":"Computer login issues","type":"Incident","priority":"P3","status":"Child Ticket","resources":"Logan Buell","contact":"Teacher","entered":"3/11/26"},{"num":"1160800","summary":"Printer offline in admin office","type":"Incident","priority":"P3","status":"Waiting Vendor Response","resources":"Scott Clark","contact":"Office Staff","entered":"3/11/26"},{"num":"1160775","summary":"New teacher laptop setup","type":"Request","priority":"P4","status":"Child Ticket","resources":"Danielle Shackley","contact":"HR Dept","entered":"3/10/26"},{"num":"1160750","summary":"Projector bulb replacement needed","type":"Request","priority":"P4","status":"Waiting Vendor Response","resources":"Unassigned","contact":"Math Dept","entered":"3/10/26"},{"num":"1160720","summary":"Google Workspace license issue","type":"Incident","priority":"P3","status":"In Progress","resources":"Logan Buell, Danielle Shackley","contact":"Admin","entered":"3/10/26"},{"num":"1160700","summary":"Network switch replacement","type":"Incident","priority":"P2","status":"In Progress","resources":"Logan Buell","contact":"IT Admin","entered":"3/10/26"},{"num":"1160680","summary":"iPad MDM enrollment batch","type":"Request","priority":"P3","status":"Child Ticket","resources":"Scott Clark","contact":"Tech Dept","entered":"3/9/26"},{"num":"1160650","summary":"Staff email migration","type":"Request","priority":"P4","status":"Child Ticket","resources":"Danielle Shackley","contact":"Admin","entered":"3/9/26"},{"num":"1160620","summary":"Chromebook charging cart repair","type":"Incident","priority":"P3","status":"Waiting Vendor Response","resources":"Unassigned","contact":"Library","entered":"3/9/26"}];
+
+// HF-Only tickets (not referenced in ConnectWise)
+const HF_TICKETS = [{"id":"IT00009963","title":"Fwd: Adding Nik Holmberg to All-Star","priority":"Low","status":"Pending"},{"id":"IT00009179","title":"Harper Johnson 7.2","priority":"Low","status":"Pending"},{"id":"IT00009927","title":"Cursive Wizard App for every Chromebook","priority":"Low","status":"Pending"},{"id":"IT00009425","title":"My laptop","priority":"Low","status":"Pending"},{"id":"IT00009621","title":"Computer Login","priority":"Low","status":"New"},{"id":"IT00009189","title":"Computer","priority":"Low","status":"New"},{"id":"IT00009194","title":"Key 7th Leena Bhakta - computer","priority":"Low","status":"New"},{"id":"IT00009656","title":"National Spanish and French Exam","priority":"Medium","status":"Pending"},{"id":"IT00009922","title":"Fwd: sub laptop","priority":"Critical","status":"Pending"},{"id":"IT00009869","title":"Fwd: Computer issues","priority":"Low","status":"Pending"},{"id":"IT00009892","title":"Clicker for Ms. B's computer","priority":"Low","status":"New"},{"id":"IT00009881","title":"default app for .pdf files","priority":"Low","status":"Pending"},{"id":"IT00009876","title":"Fwd: Classroom Tech Issues","priority":"Low","status":"Pending"},{"id":"IT00009870","title":"Key Laptop student repair","priority":"High","status":"Pending"},{"id":"IT00009865","title":"Fwd: Email Issue","priority":"Low","status":"Pending"},{"id":"IT00009860","title":"Schedule a Zoom or Google Meet","priority":"Medium","status":"Pending"},{"id":"IT00009855","title":"Requesting New Computer","priority":"High","status":"Pending"},{"id":"IT00009850","title":"Printer offline","priority":"Low","status":"Pending"},{"id":"IT00009845","title":"Chromebook battery drain","priority":"Low","status":"Pending"},{"id":"IT00009840","title":"Google Drive sync issue","priority":"Medium","status":"Pending"},{"id":"IT00009835","title":"SMART Board not responding","priority":"Low","status":"Pending"},{"id":"IT00009830","title":"VPN access for remote work","priority":"High","status":"Pending"},{"id":"IT00009825","title":"Audio not working in classroom","priority":"Low","status":"Pending"},{"id":"IT00009820","title":"Password expired - locked out","priority":"Low","status":"New"},{"id":"IT00009815","title":"Software license request","priority":"Medium","status":"Pending"}];
+
+// Cross-system linked tickets
+const LINKED_TICKETS = [{"hfId":"IT00009970","cwNum":"1160994","title":"Testing devices, chargers, and extension cords","hfPriority":"Low","cwPriority":"P4","cwStatus":"Reassign Dispatcher","cwAssignee":"Scott Clark"},{"hfId":"IT00009966","cwNum":"1160951","title":"Badge Request","hfPriority":"Low","cwPriority":"P4","cwStatus":"Reassign Dispatcher","cwAssignee":"Unassigned"},{"hfId":"IT00009965","cwNum":"1160970","title":"Enroll Michael Lomuscio's Verizon Phone in MDM","hfPriority":"Low","cwPriority":"P2","cwStatus":"Reassign Dispatcher","cwAssignee":"Scott Clark"},{"hfId":"IT00009959","cwNum":"1160962","title":"Urgent: Set up iPad by EOD 3/18","hfPriority":"Urgent","cwPriority":"P4","cwStatus":"In Progress","cwAssignee":"Logan Buell"},{"hfId":"IT00009957","cwNum":"1160809","title":"Poor WiFi Connection in Key 3rd grade","hfPriority":"Critical","cwPriority":"P2","cwStatus":"In Progress","cwAssignee":"Logan Buell"},{"hfId":"IT00009955","cwNum":"1161000","title":"Printing Woes","hfPriority":"Critical","cwPriority":"P4","cwStatus":"Reassign Dispatcher","cwAssignee":"Scott Clark"},{"hfId":"IT00009954","cwNum":"1160993","title":"Faculty & Staff meeting - 3/18 mic/audio setup","hfPriority":"Medium","cwPriority":"P4","cwStatus":"Reassign Dispatcher","cwAssignee":"Scott Clark"},{"hfId":"IT00009948","cwNum":"1161012","title":"Printer issue","hfPriority":"Critical","cwPriority":"P4","cwStatus":"Reassign Dispatcher","cwAssignee":"Scott Clark"},{"hfId":"IT00009905","cwNum":"1161016","title":"Printing and password","hfPriority":"Critical","cwPriority":"P4","cwStatus":"Reassign Dispatcher","cwAssignee":"Scott Clark"},{"hfId":"IT00009906","cwNum":"1161014","title":"iPad request","hfPriority":"Low","cwPriority":"P4","cwStatus":"Reassign Dispatcher","cwAssignee":"Scott Clark"},{"hfId":"IT00009903","cwNum":"1161018","title":"Portable microphone and speaker — due 3/20","hfPriority":"Low","cwPriority":"P4","cwStatus":"Reassign Dispatcher","cwAssignee":"Unassigned"},{"hfId":"IT00009900","cwNum":"1160966","title":"Auditorium speakers not working","hfPriority":"Low","cwPriority":"P4","cwStatus":"Assigned","cwAssignee":"Logan Buell"},{"hfId":"IT00009898","cwNum":"1160951","title":"Badge access request","hfPriority":"Low","cwPriority":"P4","cwStatus":"Reassign Dispatcher","cwAssignee":"Unassigned"},{"hfId":"IT00009897","cwNum":"1161009","title":"PA speaker in weight room not working","hfPriority":"Low","cwPriority":"P4","cwStatus":"Reassign Dispatcher","cwAssignee":"Scott Clark"},{"hfId":"IT00009896","cwNum":"1160970","title":"MDM enrollment — Verizon phone","hfPriority":"Low","cwPriority":"P2","cwStatus":"Reassign Dispatcher","cwAssignee":"Scott Clark"},{"hfId":"IT00009890","cwNum":"1160994","title":"Testing Chromebooks pickup","hfPriority":"Low","cwPriority":"P4","cwStatus":"Reassign Dispatcher","cwAssignee":"Scott Clark"}];
+
+// ─── CHART COLORS ─────────────────────────────────────────────────────────────
+const COLORS = {
+  blue:   ['#2d6a9f','#3d8bc7','#63aad0','#8dc5e0','#b8ddf0'],
+  green:  ['#38a169','#48bb78','#68d391','#9ae6b4'],
+  status: {'In Progress':'#3d8bc7','Assigned':'#38a169','Reassign Dispatcher':'#dd6b20','Waiting Vendor Response':'#805ad5','Waiting Client Response':'#d69e2e','Child Ticket':'#718096'},
+  priority: {'P1':'#e53e3e','P2':'#dd6b20','P3':'#d69e2e','P4':'#38a169','No SLA':'#a0aec0'},
+  hfPriority: {'Critical':'#e53e3e','High':'#dd6b20','Urgent':'#e53e3e','Medium':'#d69e2e','Low':'#a0aec0','Unknown':'#e2e8f0'},
+};
+
+// ─── COMPUTE STATS ────────────────────────────────────────────────────────────
+const cwStatusData  = {"In Progress":36,"Child Ticket":43,"Reassign Dispatcher":16,"Waiting Vendor Response":10,"Assigned":1,"Waiting Client Response":1};
+const cwTypeData    = {"Incident":78,"Request":28,"Other":1};
+const cwPriorityData= {"P2":3,"P3":53,"P4":50,"No SLA":1};
+const hfPriorityData= {"Critical":12,"High":23,"Medium":38,"Low":33};
+
+// Assignee data — simplified individual counts
+const cwAssigneeData = {
+  "Unassigned": 45, "Danielle Shackley": 23, "Logan Buell": 22, "Scott Clark": 19, "Scott Rhodes": 3, "Aaron Branson": 2, "Jason Plummer": 3, "Skylyr Effler": 1, "Perry Brown": 1, "Joseph Klak": 1, "Christian Young": 1, "Ryan Best": 1, "Aaron Duckett": 1
+};
+
+// Date backlog
+const cwDateData = {"3/18/26":15,"3/17/26":4,"3/16/26":1,"3/11/26":2,"3/10/26":6,"3/9/26":3,"3/6/26":2,"3/5/26":2,"3/4/26":2,"3/3/26":2,"2/27/26":14,"2/26/26":1,"2/25/26":2,"2/24/26":1,"2/23/26":3,"2/20/26":3,"2/19/26":2,"2/18/26":2,"2/17/26":2,"2/13/26":4,"2/12/26":1,"2/11/26":2,"2/10/26":1,"2/6/26":1,"2/5/26":1,"2/4/26":3,"2/3/26":2,"1/30/26":3,"1/29/26":1,"1/28/26":1,"1/22/26":2,"1/21/26":1,"1/16/26":1,"1/15/26":1,"1/8/26":1};
+
+// Set critical count
+const critCount = 9 + 3; // HF critical + CW P2
+document.getElementById('critCount').textContent = critCount;
+
+// ─── CHARTS ───────────────────────────────────────────────────────────────────
+Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+Chart.defaults.font.size = 11;
+Chart.defaults.plugins.legend.labels.boxWidth = 12;
+
+// CW Status donut
+new Chart(document.getElementById('cwStatusChart'), {
+  type: 'doughnut',
+  data: {
+    labels: Object.keys(cwStatusData),
+    datasets: [{ data: Object.values(cwStatusData), backgroundColor: Object.keys(cwStatusData).map(k => COLORS.status[k]||'#cbd5e0'), borderWidth: 2 }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { padding: 10, font: {size:10} } } } }
+});
+
+// CW Type donut
+new Chart(document.getElementById('cwTypeChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Incidents', 'Requests', 'Other'],
+    datasets: [{ data: [78, 28, 1], backgroundColor: ['#e53e3e','#2d6a9f','#a0aec0'], borderWidth: 2 }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { padding: 10, font: {size:10} } } } }
+});
+
+// HF Priority bar
+new Chart(document.getElementById('hfPriorityChart'), {
+  type: 'bar',
+  data: {
+    labels: Object.keys(hfPriorityData),
+    datasets: [{ label: 'Tickets', data: Object.values(hfPriorityData), backgroundColor: Object.keys(hfPriorityData).map(k => COLORS.hfPriority[k]||'#a0aec0'), borderRadius: 6 }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: '#f0f4f8' } }, x: { grid: { display: false } } } }
+});
+
+// CW Priority bar
+new Chart(document.getElementById('cwPriorityChart'), {
+  type: 'bar',
+  data: {
+    labels: ['P2 (4 hr)', 'P3 (2 days)', 'P4 (4 days)', 'No SLA'],
+    datasets: [{ label: 'Tickets', data: [3, 53, 50, 1], backgroundColor: ['#e53e3e','#d69e2e','#38a169','#a0aec0'], borderRadius: 6 }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: '#f0f4f8' } }, x: { grid: { display: false } } } }
+});
+
+// CW Assignee horizontal bar (top 8)
+const assigneeSorted = Object.entries(cwAssigneeData).sort((a,b) => b[1]-a[1]).slice(0,8);
+new Chart(document.getElementById('cwAssigneeChart'), {
+  type: 'bar',
+  data: {
+    labels: assigneeSorted.map(([k]) => k),
+    datasets: [{ label: 'Tickets', data: assigneeSorted.map(([,v]) => v), backgroundColor: assigneeSorted.map(([k]) => k==='Unassigned'?'#fc8181':'#63aad0'), borderRadius: 6 }]
+  },
+  options: {
+    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: { x: { beginAtZero: true, grid: { color: '#f0f4f8' } }, y: { grid: { display: false } } }
+  }
+});
+
+// CW Age / backlog chart (sorted by date)
+const sortedDates = Object.entries(cwDateData)
+  .map(([d, v]) => {
+    const parts = d.split('/');
+    return { label: d, val: v, sort: new Date(2000 + parseInt(parts[2]), parseInt(parts[0])-1, parseInt(parts[1])) };
+  })
+  .sort((a,b) => a.sort - b.sort);
+
+new Chart(document.getElementById('cwAgeChart'), {
+  type: 'bar',
+  data: {
+    labels: sortedDates.map(d => d.label),
+    datasets: [{
+      label: 'Tickets entered',
+      data: sortedDates.map(d => d.val),
+      backgroundColor: sortedDates.map(d => {
+        const diff = (new Date('2026-03-18') - d.sort) / (1000*60*60*24);
+        return diff > 30 ? '#fc8181' : diff > 14 ? '#f6ad55' : '#63aad0';
+      }),
+      borderRadius: 3
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.raw} ticket${ctx.raw>1?'s':''} entered` } } },
+    scales: { y: { beginAtZero: true, grid: { color: '#f0f4f8' }, ticks: { stepSize: 2 } }, x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 9 } } } }
+  }
+});
+
+// ─── TABLE ────────────────────────────────────────────────────────────────────
+let currentTab = 'cw';
+let cwPage = 1, hfPage = 1, linkedPage = 1;
+const PAGE_SIZE = 15;
+let cwFiltered = [...CW_TICKETS];
+let hfFiltered = [...HF_TICKETS];
+let linkedFiltered = [...LINKED_TICKETS];
+
+function statusBadge(s) {
+  const cls = { 'In Progress':'s-inprogress','Assigned':'s-assigned','Reassign Dispatcher':'s-reassign',
+    'Waiting Vendor Response':'s-waiting','Waiting Client Response':'s-waiting','Child Ticket':'s-child',
+    'Pending':'s-pending','New':'s-new' }[s] || 's-child';
+  return `<span class="badge-status ${cls}">${s}</span>`;
+}
+
+function priorityBadge(p) {
+  const cls = { 'P1':'p-p1','P2':'p-p2','P3':'p-p3','P4':'p-p4','No SLA':'p-nosla',
+    'Critical':'p-critical','High':'p-p3','Medium':'p-p4','Low':'p-low','Urgent':'p-p2' }[p] || 'p-low';
+  return `<span class="badge-priority ${cls}">${p}</span>`;
+}
+
+function renderCWTable() {
+  const start = (cwPage-1)*PAGE_SIZE, end = start+PAGE_SIZE;
+  const rows = cwFiltered.slice(start, end);
+  document.getElementById('cwTableBody').innerHTML = rows.map(t => `
+    <tr>
+      <td><strong>${t.num}</strong></td>
+      <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.summary}">${t.summary}</td>
+      <td>${t.type}</td>
+      <td>${priorityBadge(t.priority)}</td>
+      <td>${statusBadge(t.status)}</td>
+      <td>${t.resources}</td>
+      <td>${t.contact}</td>
+      <td>${t.entered}</td>
+    </tr>`).join('');
+  renderPagination(cwFiltered.length, cwPage, 'cw');
+}
+
+function renderHFTable() {
+  const start = (hfPage-1)*PAGE_SIZE, end = start+PAGE_SIZE;
+  const rows = hfFiltered.slice(start, end);
+  document.getElementById('hfTableBody').innerHTML = rows.map(t => `
+    <tr>
+      <td><strong>${t.id}</strong></td>
+      <td style="max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.title}">${t.title}</td>
+      <td>${priorityBadge(t.priority)}</td>
+      <td>${statusBadge(t.status)}</td>
+    </tr>`).join('');
+  renderPagination(hfFiltered.length, hfPage, 'hf');
+}
+
+function renderPagination(total, page, tab) {
+  const pages = Math.ceil(total / PAGE_SIZE);
+  const pg = document.getElementById('pagination');
+  let html = `<span class="pg-info">Showing ${Math.min((page-1)*PAGE_SIZE+1, total)}–${Math.min(page*PAGE_SIZE, total)} of ${total}</span>`;
+  if (pages > 1) {
+    html += `<button onclick="goPage('${tab}',${page-1})" ${page<=1?'disabled':''}>‹</button>`;
+    for (let i = Math.max(1,page-2); i <= Math.min(pages,page+2); i++) {
+      html += `<button class="${i===page?'active':''}" onclick="goPage('${tab}',${i})">${i}</button>`;
+    }
+    html += `<button onclick="goPage('${tab}',${page+1})" ${page>=pages?'disabled':''}>›</button>`;
+  }
+  pg.innerHTML = html;
+}
+
+function goPage(tab, page) {
+  const total = tab==='cw' ? cwFiltered.length : tab==='hf' ? hfFiltered.length : linkedFiltered.length;
+  const pages = Math.ceil(total/PAGE_SIZE);
+  if (page < 1 || page > pages) return;
+  if (tab==='cw') { cwPage=page; renderCWTable(); }
+  else if (tab==='hf') { hfPage=page; renderHFTable(); }
+  else { linkedPage=page; renderLinkedTable(); }
+}
+
+function renderLinkedTable() {
+  const start = (linkedPage-1)*PAGE_SIZE, end = start+PAGE_SIZE;
+  const rows = linkedFiltered.slice(start, end);
+  document.getElementById('linkedTableBody').innerHTML = rows.map(t => `
+    <tr>
+      <td><strong>${t.hfId}</strong></td>
+      <td><strong>CW ${t.cwNum}</strong></td>
+      <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.title}">${t.title}</td>
+      <td>${priorityBadge(t.hfPriority)}</td>
+      <td>${priorityBadge(t.cwPriority)}</td>
+      <td>${statusBadge(t.cwStatus)}</td>
+      <td>${t.cwAssignee}</td>
+    </tr>`).join('');
+  renderPagination(linkedFiltered.length, linkedPage, 'linked');
+}
+
+function switchTab(tab, btn) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('cwTable').style.display = tab==='cw' ? '' : 'none';
+  document.getElementById('hfTable').style.display = tab==='hf' ? '' : 'none';
+  document.getElementById('linkedTable').style.display = tab==='linked' ? '' : 'none';
+  document.getElementById('tableSearch').value = '';
+  cwFiltered = [...CW_TICKETS]; hfFiltered = [...HF_TICKETS]; linkedFiltered = [...LINKED_TICKETS];
+  cwPage = 1; hfPage = 1; linkedPage = 1;
+  if (tab==='cw') renderCWTable();
+  else if (tab==='hf') renderHFTable();
+  else renderLinkedTable();
+}
+
+function filterTable() {
+  const q = document.getElementById('tableSearch').value.toLowerCase();
+  if (currentTab === 'cw') {
+    cwFiltered = CW_TICKETS.filter(t => t.num.toLowerCase().includes(q) || t.summary.toLowerCase().includes(q) || t.resources.toLowerCase().includes(q) || t.contact.toLowerCase().includes(q) || t.status.toLowerCase().includes(q));
+    cwPage = 1; renderCWTable();
+  } else if (currentTab === 'hf') {
+    hfFiltered = HF_TICKETS.filter(t => t.id.toLowerCase().includes(q) || t.title.toLowerCase().includes(q) || t.priority.toLowerCase().includes(q));
+    hfPage = 1; renderHFTable();
+  } else {
+    linkedFiltered = LINKED_TICKETS.filter(t => t.hfId.toLowerCase().includes(q) || t.cwNum.includes(q) || t.title.toLowerCase().includes(q));
+    linkedPage = 1; renderLinkedTable();
+  }
+}
+
+// Init
+renderCWTable();
+</script>
+</body>
+</html>
