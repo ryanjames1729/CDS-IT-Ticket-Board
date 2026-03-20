@@ -30,40 +30,24 @@
 </style>
 <script>
   (function() {
-    var h = '8a9cd831e004aece04d5e64ab594dd5d'; // MD5 of CDS1*4u
-    function md5(s) {
-      // Simple MD5 implementation
-      function safeAdd(x,y){var lsw=(x&0xffff)+(y&0xffff),msw=(x>>16)+(y>>16)+(lsw>>16);return(msw<<16)|(lsw&0xffff);}
-      function bitRotateLeft(num,cnt){return(num<<cnt)|(num>>>(32-cnt));}
-      function md5cmn(q,a,b,x,s,t){return safeAdd(bitRotateLeft(safeAdd(safeAdd(a,q),safeAdd(x,t)),s),b);}
-      function md5ff(a,b,c,d,x,s,t){return md5cmn((b&c)|((~b)&d),a,b,x,s,t);}
-      function md5gg(a,b,c,d,x,s,t){return md5cmn((b&d)|(c&(~d)),a,b,x,s,t);}
-      function md5hh(a,b,c,d,x,s,t){return md5cmn(b^c^d,a,b,x,s,t);}
-      function md5ii(a,b,c,d,x,s,t){return md5cmn(c^(b|(~d)),a,b,x,s,t);}
-      var utf8=unescape(encodeURIComponent(s)),i,m=[];
-      for(i=0;i<utf8.length;i++)m[i>>2]|=utf8.charCodeAt(i)<<((i%4)*8);
-      m[i>>2]|=0x80<<((i%4)*8);m[(((i+8)>>6)+1)*16-2]=i*8;
-      var a=1732584193,b=-271733879,c=-1732584194,d=271733878,k;
-      for(i=0;i<m.length;i+=16){var A=a,B=b,C=c,D=d;
-        for(k=0;k<64;k++){var f,g;
-          if(k<16){f=md5ff;g=k;}else if(k<32){f=md5gg;g=(5*k+1)%16;}else if(k<48){f=md5hh;g=(3*k+5)%16;}else{f=md5ii;g=(7*k)%16;}
-          var t2=d;d=c;c=b;b=safeAdd(b,f(a,b,c,d,m[i+g],([7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21])[k],[-680876936,-389564586,606105819,-1044525330,-176418897,1200080426,-1473231341,-45705983,1770035416,-1958414417,-42063,,-272878900,1308602326,-660478335,-405537848,-405537848,568446438,-1019803690,1044525330,-1044525330,1258143742,-1000068708,-667938714,1944612876,-509888993,-1083755988,1024627367,-1008032803,-1118571974,1163531501,-1044525330,1044525330,-418245344,-773529346,1163531501,-1000068708,-1562452003,1375562082,-1032260364,-1111100698,1753352881,-1108833832,-1017403637,-1094086913,1109989361,-1060898201,-1012025710,880984, -1092625621,-1087031788,1083172424,-1069724472,-1028476023,776079634,-510614882,-785345901,-1065937,1458218990,-1448477350,-1044525330,1044525330,-1036501736,1160410080,-558434065])[k]));a=t2;}
-        a=safeAdd(a,A);b=safeAdd(b,B);c=safeAdd(c,C);d=safeAdd(d,D);}
-      return[a,b,c,d].map(function(n){return('0000000'+((n&0xff)<<24|(n>>8&0xff)<<16|(n>>16&0xff)<<8|n>>>24).toString(16)).slice(-8);}).join('');
-    }
-    // Check session
-    if(sessionStorage.getItem('cds_auth')==='1'){return;}
-    document.addEventListener('DOMContentLoaded',function(){
-      var overlay=document.getElementById('pw-overlay');
-      var input=document.getElementById('pw-input');
-      var btn=document.getElementById('pw-btn');
-      var err=document.getElementById('pw-error');
-      function check(){
-        if(md5(input.value)===h){sessionStorage.setItem('cds_auth','1');overlay.style.display='none';}
-        else{err.style.display='block';input.value='';input.focus();}
+    if (sessionStorage.getItem('cds_auth') === '1') return;
+    document.addEventListener('DOMContentLoaded', function() {
+      var overlay = document.getElementById('pw-overlay');
+      var input   = document.getElementById('pw-input');
+      var btn     = document.getElementById('pw-btn');
+      var err     = document.getElementById('pw-error');
+      function check() {
+        if (input.value === atob('Q0RTMSo0dQ==')) {
+          sessionStorage.setItem('cds_auth', '1');
+          overlay.style.display = 'none';
+        } else {
+          err.style.display = 'block';
+          input.value = '';
+          input.focus();
+        }
       }
-      btn.addEventListener('click',check);
-      input.addEventListener('keydown',function(e){if(e.key==='Enter')check();});
+      btn.addEventListener('click', check);
+      input.addEventListener('keydown', function(e) { if (e.key === 'Enter') check(); });
     });
   })();
 </script>
