@@ -119,7 +119,7 @@
 <header>
   <div>
     <h1>🖥️ Carolina Day School — IT Ticket Dashboard</h1>
-    <p id="last-updated">Last refreshed: March 20, 2026 at 12:00 PM · HappyFox + ConnectWise</p>
+    <p id="last-updated">Last refreshed: March 20, 2026 at 3:45 PM · HappyFox + ConnectWise</p>
   </div>
   <button class="refresh-btn" onclick="alert('To refresh: reopen this file after running Claude again with both portals open.')">↻ Refresh</button>
 </header>
@@ -234,7 +234,7 @@
     </div>
     <div class="card green">
       <div class="label">HF-Only Tickets</div>
-      <div class="value">81</div>
+      <div class="value">80</div>
       <div class="sub">Not tracked in ConnectWise</div>
     </div>
     <div class="card red">
@@ -252,15 +252,15 @@
   <!-- Row 1: CW Status, CW Type, HF Priority -->
   <div class="charts-row row-3">
     <div class="chart-card">
-      <h3>CW — Ticket Status <span class="badge">76 unique · 107 total</span></h3>
+      <h3>CW — Ticket Status <span class="badge">111 total</span></h3>
       <div class="chart-wrap" style="height:220px"><canvas id="cwStatusChart"></canvas></div>
     </div>
     <div class="chart-card">
-      <h3>CW — Incident vs Request <span class="badge">107 tickets</span></h3>
+      <h3>CW — Incident vs Request <span class="badge">111 tickets</span></h3>
       <div class="chart-wrap" style="height:220px"><canvas id="cwTypeChart"></canvas></div>
     </div>
     <div class="chart-card">
-      <h3>HF — Priority Breakdown <span class="badge">105 tickets</span></h3>
+      <h3>HF — Priority Breakdown <span class="badge">103 tickets</span></h3>
       <div class="chart-wrap" style="height:220px"><canvas id="hfPriorityChart"></canvas></div>
     </div>
   </div>
@@ -291,8 +291,8 @@
       <div style="display:flex;align-items:center;gap:16px">
         <h3>Recent Tickets</h3>
         <div class="tabs">
-          <button class="tab active" onclick="switchTab('cw', this)">ConnectWise (76 unique)</button>
-          <button class="tab" onclick="switchTab('hf', this)">HappyFox Only (89)</button>
+          <button class="tab active" onclick="switchTab('cw', this)">ConnectWise (111)</button>
+          <button class="tab" onclick="switchTab('hf', this)">HappyFox Only (103)</button>
           <button class="tab" onclick="switchTab('linked', this)">🔗 Linked (18)</button>
         </div>
       </div>
@@ -352,7 +352,7 @@
 
 </div>
 
-<footer>Carolina Day School IT Dashboard · Built from live HappyFox &amp; ConnectWise data · March 18, 2026</footer>
+<footer>Carolina Day School IT Dashboard · Built from live HappyFox &amp; ConnectWise data · March 20, 2026</footer>
 
 <script>
 // ─── DATA ────────────────────────────────────────────────────────────────────
@@ -375,10 +375,10 @@ const COLORS = {
 };
 
 // ─── COMPUTE STATS ────────────────────────────────────────────────────────────
-const cwStatusData  = {"In Progress":36,"Child Ticket":43,"Reassign Dispatcher":16,"Waiting Vendor Response":10,"Assigned":1,"Waiting Client Response":1};
-const cwTypeData    = {"Incident":78,"Request":28,"Other":1};
+const cwStatusData  = {"In Progress":39,"Child Ticket":49,"Assigned":11,"Waiting Vendor Response":9,"New":2,"Reassign Dispatcher":1};
+const cwTypeData    = {"Incident":85,"Request":26};
 const cwPriorityData= {"P2":3,"P3":53,"P4":50,"No SLA":1};
-const hfPriorityData= {"Critical":12,"High":23,"Medium":38,"Low":33};
+const hfPriorityData= {"Critical":11,"High":22,"Medium":37,"Low":33};
 
 // Assignee data — simplified individual counts
 const cwAssigneeData = {
