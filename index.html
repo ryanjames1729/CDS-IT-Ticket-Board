@@ -749,13 +749,13 @@
     <table id="ticketsTable">
       <thead>
         <tr>
-          <th style="width:90px">Ticket #</th>
-          <th style="width:60px">Source</th>
-          <th>Summary</th>
-          <th style="width:100px">Priority</th>
-          <th style="width:130px">Status</th>
-          <th style="width:140px">Assignee</th>
-          <th style="width:280px">Recommended Action</th>
+          <th style="width:7%">Ticket #</th>
+          <th style="width:4%">Source</th>
+          <th style="width:17%">Summary</th>
+          <th style="width:8%">Priority</th>
+          <th style="width:10%">Status</th>
+          <th style="width:11%">Assignee</th>
+          <th style="width:43%">Recommended Action</th>
         </tr>
       </thead>
       <tbody id="ticketsTableBody">
@@ -1196,7 +1196,7 @@ function renderCWTable() {
   document.getElementById('cwTableBody').innerHTML = cwFiltered.slice(start, end).map(t => `
     <tr>
       <td><strong>${t.num}</strong></td>
-      <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.summary}">${t.summary}</td>
+      <td style="max-width:280px;" title="${t.summary}">${t.summary}</td>
       <td>${t.type}</td>
       <td>${priorityBadge(t.priority)}</td>
       <td>${statusBadge(t.status)}</td>
@@ -1225,7 +1225,7 @@ function renderLinkedTable() {
     <tr>
       <td><strong>${t.hfId}</strong></td>
       <td><strong>CW ${t.cwNum}</strong></td>
-      <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.title}">${t.title}</td>
+      <td style="max-width:280px;" title="${t.title}">${t.title}</td>
       <td>${priorityBadge(t.hfPriority)}</td>
       <td>${priorityBadge(t.cwPriority)}</td>
       <td>${statusBadge(t.cwStatus)}</td>
