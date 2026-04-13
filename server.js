@@ -79,6 +79,7 @@ app.post('/api/sync-cw', async (req, res) => {
 
     const data = await readData();
     data.cw = tickets;
+    data.cwLastSync = new Date().toISOString();
     data.lastUpdated = new Date().toISOString();
     await writeData(data);
 
@@ -117,6 +118,7 @@ app.post('/api/upload-hf', upload.single('csv'), async (req, res) => {
 
     const data = await readData();
     data.hf = tickets;
+    data.hfLastSync = new Date().toISOString();
     data.lastUpdated = new Date().toISOString();
     await writeData(data);
 
@@ -216,6 +218,7 @@ app.post('/api/sync-teams', async (req, res) => {
 
     const data = await readData();
     data.teams = messages;
+    data.teamsLastSync = new Date().toISOString();
     data.lastUpdated = new Date().toISOString();
     await writeData(data);
 

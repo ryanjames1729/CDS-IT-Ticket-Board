@@ -835,17 +835,42 @@
     </div>
   </div>
 
-  <!-- Setup instructions -->
+  <!-- Data source status -->
   <div style="background:white;border-radius:12px;padding:20px 24px;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
-    <h3 style="font-size:0.85rem;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:14px;">🔧 Teams Setup (one-time)</h3>
-    <ol style="font-size:0.82rem;color:#4a5568;line-height:2;padding-left:20px;">
-      <li>Go to <strong>portal.azure.com</strong> → Azure Active Directory → App registrations → New registration</li>
-      <li>Name it <em>CDS IT Dashboard</em>, set account type to <em>Single tenant</em></li>
-      <li>Under <strong>API permissions</strong> add <code style="background:#f0f4f8;padding:1px 5px;border-radius:4px;">Chat.Read.All</code> (Application permission) and grant admin consent</li>
-      <li>Under <strong>Certificates &amp; secrets</strong> create a new client secret — copy the value immediately</li>
-      <li>Add to your <code style="background:#f0f4f8;padding:1px 5px;border-radius:4px;">.env</code> file: <code style="background:#f0f4f8;padding:1px 5px;border-radius:4px;">AZURE_TENANT_ID</code>, <code style="background:#f0f4f8;padding:1px 5px;border-radius:4px;">AZURE_CLIENT_ID</code>, <code style="background:#f0f4f8;padding:1px 5px;border-radius:4px;">AZURE_CLIENT_SECRET</code>, <code style="background:#f0f4f8;padding:1px 5px;border-radius:4px;">TEAMS_CHAT_ID</code></li>
-      <li>Get your Chat ID: open Teams in a browser, click the chat, copy the URL — look for the long string after <em>/conversations/</em> (starts with <code style="background:#f0f4f8;padding:1px 5px;border-radius:4px;">19:</code>)</li>
-    </ol>
+    <h3 style="font-size:0.85rem;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:16px;">📡 Connected Data Sources</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
+
+      <div style="background:#f7fafc;border-radius:10px;padding:16px 18px;border-left:3px solid #4299e1;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="font-size:1rem;">🔵</span>
+          <strong style="font-size:0.85rem;color:#2d3748;">ConnectWise</strong>
+          <span style="background:#c6f6d5;color:#276749;font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:20px;">Live</span>
+        </div>
+        <p style="font-size:0.78rem;color:#718096;line-height:1.5;margin:0 0 8px;">Pulls all open tickets via Playwright browser automation. Run weekly or after major changes. Takes ~2 minutes.</p>
+        <div style="font-size:0.72rem;color:#a0aec0;">Last synced: <span id="cwLastSync">—</span></div>
+      </div>
+
+      <div style="background:#f7fafc;border-radius:10px;padding:16px 18px;border-left:3px solid #c8a951;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="font-size:1rem;">🟡</span>
+          <strong style="font-size:0.85rem;color:#2d3748;">HappyFox</strong>
+          <span style="background:#c6f6d5;color:#276749;font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:20px;">Live</span>
+        </div>
+        <p style="font-size:0.78rem;color:#718096;line-height:1.5;margin:0 0 8px;">Upload a CSV export from HappyFox → Reports → Ticket Export. Upload as often as needed to keep data fresh.</p>
+        <div style="font-size:0.72rem;color:#a0aec0;">Last synced: <span id="hfLastSync">—</span></div>
+      </div>
+
+      <div style="background:#f7fafc;border-radius:10px;padding:16px 18px;border-left:3px solid #6264a7;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="font-size:1rem;">🟣</span>
+          <strong style="font-size:0.85rem;color:#2d3748;">Microsoft Teams</strong>
+          <span style="background:#c6f6d5;color:#276749;font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:20px;">Live</span>
+        </div>
+        <p style="font-size:0.78rem;color:#718096;line-height:1.5;margin:0 0 8px;">Pulls the last 50 messages from <strong>CDS Onsite Support</strong> chat. Used to enrich systemic issue detection — not displayed as tickets.</p>
+        <div style="font-size:0.72rem;color:#a0aec0;">Last synced: <span id="teamsLastSync">—</span></div>
+      </div>
+
+    </div>
   </div>
 
 </div>
@@ -882,6 +907,22 @@ let CW_OPEN_TICKETS = CW_TICKETS.filter(t => !t.closed);
 // SECTION 2 — SERVER DATA LOADING
 // ═══════════════════════════════════════════════════════════════════════════
 
+function fmtTs(isoStr) {
+  if (!isoStr) return '—';
+  const d = new Date(isoStr);
+  return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) +
+    ' at ' + d.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
+}
+
+function updateSourceTimestamps(data) {
+  const cw = document.getElementById('cwLastSync');
+  const hf = document.getElementById('hfLastSync');
+  const tm = document.getElementById('teamsLastSync');
+  if (cw) cw.textContent = data.cwLastSync    ? fmtTs(data.cwLastSync)    : (data.cw    && data.cw.length    ? fmtTs(data.lastUpdated) : '—');
+  if (hf) hf.textContent = data.hfLastSync    ? fmtTs(data.hfLastSync)    : (data.hf    && data.hf.length    ? fmtTs(data.lastUpdated) : '—');
+  if (tm) tm.textContent = data.teamsLastSync ? fmtTs(data.teamsLastSync) : (data.teams && data.teams.length ? fmtTs(data.lastUpdated) : '—');
+}
+
 async function loadData() {
   try {
     const res = await fetch('/api/data', { signal: AbortSignal.timeout(2500) });
@@ -904,6 +945,7 @@ async function loadData() {
         document.getElementById('syncDot').classList.remove('stale');
         document.getElementById('syncLabel').textContent = 'Live server data';
       }
+      updateSourceTimestamps(data);
     }
   } catch (_) {
     // Server not running — using embedded snapshot, that's fine
