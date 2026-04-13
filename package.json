@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "scrape": "node scraper.js"
+    "scrape": "node scraper.js",
+    "postinstall": "npx playwright install chromium --with-deps"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",
