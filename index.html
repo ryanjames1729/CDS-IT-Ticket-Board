@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Carolina Day School — IT Ticket Dashboard</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%231e3a5f'/><polyline points='2,16 7,16 10,9 13,23 16,12 19,20 22,9 25,23 28,16 32,16' stroke='%23c8a951' stroke-width='2.2' fill='none' stroke-linejoin='round' stroke-linecap='round'/></svg>">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   /* ── Password overlay ─────────────────────────────────────────────────── */
@@ -318,6 +319,81 @@
     width: 8px; height: 8px; border-radius: 50%;
     background: linear-gradient(135deg, #2d6a9f, #38a169);
   }
+
+  /* ── Interactive Hover & Glow Effects ────────────────────────────────── */
+
+  /* Summary cards — lift + color-matched glow */
+  .card { transition: transform 0.22s ease, box-shadow 0.22s ease; }
+  .card:hover { transform: translateY(-5px); }
+  .card.blue:hover   { box-shadow: 0 12px 30px rgba(45,106,159,0.38); }
+  .card.green:hover  { box-shadow: 0 12px 30px rgba(56,161,105,0.38); }
+  .card.red:hover    { box-shadow: 0 12px 30px rgba(229,62,62,0.38); }
+  .card.orange:hover { box-shadow: 0 12px 30px rgba(221,107,32,0.38); }
+
+  /* Chart cards */
+  .chart-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+  .chart-card:hover { transform: translateY(-3px); box-shadow: 0 8px 26px rgba(45,106,159,0.2); }
+
+  /* Import cards (dark) */
+  .import-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+  .import-card:hover { transform: translateY(-3px); box-shadow: 0 8px 28px rgba(0,0,0,0.4); }
+
+  /* Import buttons — glow on hover */
+  .import-btn { transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s; }
+  .import-btn.blue:hover { opacity:1; transform: translateY(-2px); box-shadow: 0 4px 18px rgba(66,153,225,0.65); }
+  .import-btn.gold:hover { opacity:1; transform: translateY(-2px); box-shadow: 0 4px 18px rgba(200,169,81,0.65); }
+
+  /* Intel / systemic section */
+  .intel-section { transition: box-shadow 0.3s ease; }
+  .intel-section:hover { box-shadow: 0 6px 28px rgba(45,106,159,0.22); }
+
+  /* Ticket & table cards */
+  .table-card { transition: box-shadow 0.2s ease; }
+  .table-card:hover { box-shadow: 0 6px 22px rgba(45,106,159,0.17); }
+
+  /* Sync last-run card */
+  .sync-last-run { transition: box-shadow 0.2s ease; }
+  .sync-last-run:hover { box-shadow: 0 4px 18px rgba(45,106,159,0.17); }
+
+  /* Filter buttons */
+  .filter-btn { transition: all 0.15s; }
+  .filter-btn:hover { transform: translateY(-1px); box-shadow: 0 3px 12px rgba(45,106,159,0.25); }
+  .filter-btn.active { box-shadow: 0 3px 14px rgba(45,106,159,0.38); }
+
+  /* Tabs */
+  .tab { transition: all 0.15s; }
+  .tab.active { box-shadow: 0 2px 12px rgba(45,106,159,0.32); }
+
+  /* Nav items */
+  .nav-item { transition: background 0.15s, box-shadow 0.15s; }
+  .nav-item:hover { box-shadow: 0 2px 14px rgba(255,255,255,0.18); }
+  .nav-item.active { box-shadow: 0 2px 16px rgba(200,169,81,0.5); }
+
+  /* Header emblem — soft gold pulse */
+  @keyframes emblemPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(200,169,81,0), inset 0 0 0 rgba(200,169,81,0); }
+    50%       { box-shadow: 0 0 14px rgba(200,169,81,0.45), inset 0 0 6px rgba(200,169,81,0.1); }
+  }
+  .cds-emblem { animation: emblemPulse 4s ease-in-out infinite; }
+  .cds-logo-img { width: 46px; height: 46px; object-fit: cover; border-radius: 50%; display: block; }
+
+  /* WPS long-running alert — slow red pulse */
+  @keyframes alertGlow {
+    0%, 100% { box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    50%       { box-shadow: 0 4px 24px rgba(229,62,62,0.4); }
+  }
+  #wps-alert { animation: alertGlow 3s ease-in-out infinite; }
+
+  /* Dedup banner subtle glow */
+  #dedup-banner { transition: box-shadow 0.2s ease; }
+  #dedup-banner:hover { box-shadow: 0 4px 22px rgba(45,106,159,0.2); }
+
+  /* Login button glow */
+  #pw-btn { transition: background 0.2s, box-shadow 0.2s; }
+  #pw-btn:hover { background: #1e3a5f; box-shadow: 0 4px 18px rgba(30,58,95,0.45); }
+
+  /* Login logo img */
+  #pw-logo img { width: 54px; height: 54px; object-fit: cover; border-radius: 50%; display: block; }
 </style>
 
 <script>
@@ -356,7 +432,10 @@
 <!-- ── Password Overlay ──────────────────────────────────────────────────── -->
 <div id="pw-overlay">
   <div id="pw-box">
-    <div id="pw-logo">CDS</div>
+    <div id="pw-logo">
+      <img src="/cds-logo.png" alt="CDS" onerror="this.style.display='none';document.getElementById('pwLogoFallback').style.display='block'">
+      <span id="pwLogoFallback" style="display:none">CDS</span>
+    </div>
     <h2>Carolina Day School</h2>
     <p>IT Ticket Dashboard — Authorized Access Only</p>
     <input id="pw-input" type="password" placeholder="Password" autofocus />
@@ -369,7 +448,10 @@
 <!-- ── Header ────────────────────────────────────────────────────────────── -->
 <header>
   <div class="header-left">
-    <div class="cds-emblem"><span>CDS</span></div>
+    <div class="cds-emblem">
+      <img src="/cds-logo.png" alt="CDS" class="cds-logo-img" onerror="this.style.display='none';document.getElementById('cdsEmblemFallback').style.display='block'">
+      <span id="cdsEmblemFallback" style="display:none;font-size:1rem;font-weight:900;letter-spacing:-1px;color:white;">CDS</span>
+    </div>
     <div class="header-title">
       <h1>Carolina Day School — IT Dashboard</h1>
       <p id="last-updated">Last synced: March 20, 2026 at 3:45 PM · HappyFox + ConnectWise</p>
@@ -399,7 +481,7 @@
 <div class="main">
 
   <!-- ── Deduplication Banner ───────────────────────────────────────────── -->
-  <div style="background:white;border-radius:12px;padding:14px 20px;margin-bottom:12px;border-left:4px solid #2d6a9f;box-shadow:0 1px 4px rgba(0,0,0,0.08);display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+  <div id="dedup-banner" style="background:white;border-radius:12px;padding:14px 20px;margin-bottom:12px;border-left:4px solid #2d6a9f;box-shadow:0 1px 4px rgba(0,0,0,0.08);display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
     <span style="font-size:1.1rem">🔗</span>
     <div>
       <strong style="color:#2d3748;font-size:0.88rem;">Contextual deduplication applied:</strong>
@@ -489,7 +571,7 @@
   </div>
 
   <!-- ── WPS-7178 Long-running Alert ────────────────────────────────────── -->
-  <div style="background:#fff5f5;border-radius:12px;padding:14px 20px;margin-bottom:16px;border-left:4px solid #e53e3e;box-shadow:0 1px 4px rgba(0,0,0,0.08);display:flex;align-items:center;gap:14px;">
+  <div id="wps-alert" style="background:#fff5f5;border-radius:12px;padding:14px 20px;margin-bottom:16px;border-left:4px solid #e53e3e;box-shadow:0 1px 4px rgba(0,0,0,0.08);display:flex;align-items:center;gap:14px;">
     <span style="font-size:1.2rem">⚠️</span>
     <div>
       <strong style="color:#c53030;font-size:0.88rem;">Long-running issue detected:</strong>
