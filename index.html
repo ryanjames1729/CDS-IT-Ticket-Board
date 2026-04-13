@@ -623,6 +623,10 @@
         <div class="intel-col-title">👤 Frequent Requestors <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#a0aec0;">(2+ tickets — potential training opportunity)</span></div>
         <div id="intelRequestors" style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px;"></div>
       </div>
+      <div id="intelSourceLine" style="margin-top:16px;padding-top:12px;border-top:1px solid #f0f4f8;font-size:0.73rem;color:#a0aec0;display:flex;align-items:center;gap:6px;">
+        <span>📡</span>
+        <span id="intelSourceText">Analysis based on ConnectWise + HappyFox tickets</span>
+      </div>
     </div>
   </div>
 
@@ -1001,10 +1005,22 @@ function computeFrequentRequestors() {
   return Object.entries(counts).filter(([, v]) => v >= 2).sort((a, b) => b[1] - a[1]);
 }
 
+function updateIntelSourceLine() {
+  const el = document.getElementById('intelSourceText');
+  if (!el) return;
+  const teamsCount = TEAMS_MESSAGES.length;
+  if (teamsCount > 0) {
+    el.textContent = `Analysis based on ConnectWise + HappyFox tickets and ${teamsCount} Teams message${teamsCount !== 1 ? 's' : ''} from CDS Onsite Support`;
+  } else {
+    el.textContent = 'Analysis based on ConnectWise + HappyFox tickets';
+  }
+}
+
 function renderSystemicIntel() {
   const categories  = computeSystemicIssues();
   const longRunning = computeLongRunning();
   const requestors  = computeFrequentRequestors();
+  updateIntelSourceLine();
 
   // Badge: how many categories have 3+ tickets
   const hotCats = categories.filter(c => c.count >= 3).length;
