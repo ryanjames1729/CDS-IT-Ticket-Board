@@ -322,6 +322,20 @@
     background: linear-gradient(135deg, #2d6a9f, #38a169);
   }
 
+  /* ── Resizable columns ───────────────────────────────────────────────── */
+  th { position: relative; }
+  .col-resize-handle {
+    position: absolute; right: 0; top: 0;
+    width: 6px; height: 100%;
+    cursor: col-resize; user-select: none;
+    background: transparent; z-index: 2;
+    transition: background 0.15s;
+  }
+  .col-resize-handle:hover, .col-resize-handle.resizing {
+    background: rgba(45,106,159,0.35);
+    border-radius: 3px;
+  }
+
   /* ── Interactive Hover & Glow Effects ────────────────────────────────── */
 
   /* Summary cards — lift + color-matched glow */
@@ -1582,8 +1596,52 @@ function initDashboard() {
   document.getElementById('footerYear').textContent = new Date().getFullYear();
 }
 
+// ── Resizable columns ────────────────────────────────────────────────────────
+function initResizableColumns(tableId) {
+  const table = document.getElementById(tableId);
+  if (!table) return;
+
+  const ths = Array.from(table.querySelectorAll('thead th'));
+
+  ths.forEach((th, i) => {
+    // No handle on the last column — it fills remaining space
+    if (i === ths.length - 1) return;
+
+    const handle = document.createElement('div');
+    handle.className = 'col-resize-handle';
+    th.appendChild(handle);
+
+    handle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      const startX    = e.pageX;
+      const startW    = th.offsetWidth;
+      handle.classList.add('resizing');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+
+      const onMove = e => {
+        const newW = Math.max(40, startW + (e.pageX - startX));
+        th.style.width = newW + 'px';
+      };
+      const onUp = () => {
+        handle.classList.remove('resizing');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+}
+
 // Kick everything off
 loadData();
+// Init resizable columns on all ticket tables
+document.addEventListener('DOMContentLoaded', () => {
+  ['ticketsTable', 'cwTicketTable', 'hfTicketTable'].forEach(initResizableColumns);
+});
 </script>
 </body>
 </html>
