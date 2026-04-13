@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "scrape": "node scraper.js",
-    "postinstall": "npx playwright install chromium"
+    "postinstall": "PLAYWRIGHT_BROWSERS_PATH=./browsers npx playwright install chromium"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",

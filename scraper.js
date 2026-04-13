@@ -12,6 +12,10 @@
  */
 
 require('dotenv').config();
+
+// Tell Playwright where to find browsers (local ./browsers dir for Render compatibility)
+const path = require('path');
+process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(__dirname, 'browsers');
 const { chromium } = require('playwright');
 
 const CW_LOGIN_URL = 'https://cw.electronicoffice.net/v4_6_release/services/system_io/customerportal/portal.html?company=electronicoffice&locale=en#LoginPagePlace:LOGOUT';

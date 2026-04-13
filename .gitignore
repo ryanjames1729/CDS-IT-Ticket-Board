@@ -1,2 +1,4 @@
 .env
 data.json
+browsers/
+node_modules/
