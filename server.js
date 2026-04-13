@@ -7,47 +7,67 @@
  *   Open http://localhost:3000
  *
  * Endpoints:
- *   GET  /           → serves index.html
- *   GET  /api/data   → returns current data.json
- *   POST /api/sync-cw       → triggers Playwright scraper, updates data.json
- *   POST /api/upload-hf     → accepts HappyFox CSV file, parses, updates data.json
+ *   GET  /api/data          → returns current dashboard data
+ *   POST /api/sync-cw       → triggers Playwright scraper, updates data
+ *   POST /api/upload-hf     → accepts HappyFox CSV file, parses, updates data
  *   POST /api/update-dedup  → accepts updated dedup stats from the client
+ *   POST /api/sync-teams    → pulls messages from Teams chat via Graph API
  */
 
 require('dotenv').config();
-const express  = require('express');
-const multer   = require('multer');
+const express   = require('express');
+const multer    = require('multer');
 const { parse } = require('csv-parse/sync');
-const fs       = require('fs');
-const path     = require('path');
-const https    = require('https');
+const path      = require('path');
+const https     = require('https');
+const { createClient } = require('@supabase/supabase-js');
 
-const app       = express();
-const upload    = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
-const DATA_FILE = path.join(__dirname, 'data.json');
-const PORT      = process.env.PORT || 3000;
+const app    = express();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const PORT   = process.env.PORT || 3000;
+
+// ── Supabase client ───────────────────────────────────────────────────────────
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
 
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-function readData() {
-  if (fs.existsSync(DATA_FILE)) {
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+async function readData() {
+  const { data, error } = await supabase
+    .from('dashboard_data')
+    .select('data')
+    .eq('id', 1)
+    .single();
+
+  if (error || !data) {
+    return { cw: [], hf: [], linked: [], dedupStats: null, lastUpdated: null, teams: [] };
   }
-  return { cw: [], hf: [], linked: [], dedupStats: null, lastUpdated: null };
+  return data.data;
 }
 
-function writeData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+async function writeData(payload) {
+  const { error } = await supabase
+    .from('dashboard_data')
+    .upsert({ id: 1, data: payload, updated_at: new Date().toISOString() });
+
+  if (error) throw new Error(`Supabase write error: ${error.message}`);
 }
 
-// ── Routes ───────────────────────────────────────────────────────────────────
+// ── Routes ────────────────────────────────────────────────────────────────────
 
 // Return current ticket data
-app.get('/api/data', (req, res) => {
-  res.json(readData());
+app.get('/api/data', async (req, res) => {
+  try {
+    res.json(await readData());
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // Trigger ConnectWise Playwright scrape
@@ -57,10 +77,10 @@ app.post('/api/sync-cw', async (req, res) => {
     console.log('[server] Starting ConnectWise scrape…');
     const tickets = await scrapeConnectWise();
 
-    const data = readData();
+    const data = await readData();
     data.cw = tickets;
     data.lastUpdated = new Date().toISOString();
-    writeData(data);
+    await writeData(data);
 
     console.log(`[server] CW sync complete — ${tickets.length} tickets saved.`);
     res.json({ success: true, count: tickets.length });
@@ -71,7 +91,7 @@ app.post('/api/sync-cw', async (req, res) => {
 });
 
 // Accept HappyFox CSV export
-app.post('/api/upload-hf', upload.single('csv'), (req, res) => {
+app.post('/api/upload-hf', upload.single('csv'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, error: 'No file uploaded.' });
   }
@@ -84,7 +104,6 @@ app.post('/api/upload-hf', upload.single('csv'), (req, res) => {
       bom: true,
     });
 
-    // HappyFox CSV column names vary — try common field names
     const tickets = records.map(r => ({
       id:       (r['Ticket ID'] || r['Id'] || r['ID'] || '').replace(/^#/, ''),
       title:    r['Ticket Subject'] || r['Subject'] || r['Title'] || r['title'] || '',
@@ -96,10 +115,10 @@ app.post('/api/upload-hf', upload.single('csv'), (req, res) => {
       category: r['Ticket Category'] || r['Category'] || '',
     })).filter(t => t.id && t.title);
 
-    const data = readData();
+    const data = await readData();
     data.hf = tickets;
     data.lastUpdated = new Date().toISOString();
-    writeData(data);
+    await writeData(data);
 
     console.log(`[server] HF upload complete — ${tickets.length} tickets saved.`);
     res.json({ success: true, count: tickets.length });
@@ -110,11 +129,11 @@ app.post('/api/upload-hf', upload.single('csv'), (req, res) => {
 });
 
 // Save updated dedup stats (called after client-side dedup runs)
-app.post('/api/update-dedup', (req, res) => {
+app.post('/api/update-dedup', async (req, res) => {
   try {
-    const data = readData();
+    const data = await readData();
     data.dedupStats = req.body;
-    writeData(data);
+    await writeData(data);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -160,17 +179,16 @@ function stripHtml(html) {
 }
 
 app.post('/api/sync-teams', async (req, res) => {
-  const tenantId    = process.env.AZURE_TENANT_ID;
-  const clientId    = process.env.AZURE_CLIENT_ID;
+  const tenantId     = process.env.AZURE_TENANT_ID;
+  const clientId     = process.env.AZURE_CLIENT_ID;
   const clientSecret = process.env.AZURE_CLIENT_SECRET;
-  const chatId      = process.env.TEAMS_CHAT_ID;
+  const chatId       = process.env.TEAMS_CHAT_ID;
 
   if (!tenantId || !clientId || !clientSecret || !chatId) {
     return res.status(400).json({ success: false, error: 'Teams not configured — add AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, TEAMS_CHAT_ID to .env' });
   }
 
   try {
-    // Get OAuth token
     console.log('[teams] Fetching OAuth token…');
     const tokenRes = await httpPost(
       'login.microsoftonline.com',
@@ -179,7 +197,6 @@ app.post('/api/sync-teams', async (req, res) => {
     );
     if (!tokenRes.access_token) throw new Error(tokenRes.error_description || 'Token fetch failed');
 
-    // Fetch recent chat messages (top 50)
     console.log('[teams] Fetching chat messages…');
     const msgRes = await httpGet(
       'graph.microsoft.com',
@@ -197,11 +214,10 @@ app.post('/api/sync-teams', async (req, res) => {
       }))
       .filter(m => m.text.length > 5);
 
-    // Persist
-    const data = readData();
+    const data = await readData();
     data.teams = messages;
     data.lastUpdated = new Date().toISOString();
-    writeData(data);
+    await writeData(data);
 
     console.log(`[teams] Saved ${messages.length} messages.`);
     res.json({ success: true, count: messages.length, messages });
@@ -216,5 +232,5 @@ app.post('/api/sync-teams', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`\n🖥️  CDS IT Dashboard running at http://localhost:${PORT}`);
   console.log(`   Password: ${process.env.DASHBOARD_PASSWORD || 'see index.html'}`);
-  console.log(`   Data file: ${DATA_FILE}\n`);
+  console.log(`   Storage:  Supabase (${process.env.SUPABASE_URL})\n`);
 });
