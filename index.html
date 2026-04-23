@@ -1629,13 +1629,28 @@ function updateSyncPageTimestamp() {
 function initDashboard() {
   const agg = computeAggregates();
 
+  // ── Dedup banner — recalculate from live data ──────────────────────────
+  const cwCount   = CW_OPEN_TICKETS.length;
+  const hfCount   = HF_OPEN_TICKETS.length;
+  const bothCount = LINKED_TICKETS.length;
+  const hfOnly    = Math.max(0, hfCount - bothCount);
+  const total     = cwCount + hfOnly;
+
+  document.getElementById('dedupCW').textContent    = cwCount;
+  document.getElementById('dedupHF').textContent    = hfOnly;
+  document.getElementById('dedupBoth').textContent  = bothCount;
+  document.getElementById('dedupTotal').textContent = total;
+  document.getElementById('cardUnique').textContent = total;
+  document.getElementById('dedupSummaryText').textContent =
+    ` ${bothCount} ticket${bothCount !== 1 ? 's' : ''} appear in both ConnectWise and HappyFox. Counts below reflect unique issues only.`;
+
   // Summary card counts
   document.getElementById('critCount').textContent      = agg.critCount;
   document.getElementById('cardUnassigned').textContent = agg.unassignedCount;
-  document.getElementById('cardHFOnly').textContent     = HF_OPEN_TICKETS.length;
-  document.getElementById('tabCWCount').textContent     = CW_OPEN_TICKETS.length;
-  document.getElementById('tabHFCount').textContent     = HF_OPEN_TICKETS.length;
-  document.getElementById('tabLinkedCount').textContent = LINKED_TICKETS.length;
+  document.getElementById('cardHFOnly').textContent     = hfOnly;
+  document.getElementById('tabCWCount').textContent     = cwCount;
+  document.getElementById('tabHFCount').textContent     = hfCount;
+  document.getElementById('tabLinkedCount').textContent = bothCount;
 
   // Charts
   renderCharts(agg);
