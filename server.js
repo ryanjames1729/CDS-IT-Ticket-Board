@@ -333,10 +333,14 @@ app.post('/api/upload-hf', upload.single('csv'), async (req, res) => {
 
 // ── HappyFox API sync ─────────────────────────────────────────────────────────
 // Needs HF_ACCOUNT (the "yourschool" in yourschool.happyfox.com, or a full URL),
-// plus an API key and auth code from HappyFox → Manage → Integrations → API.
+// plus an API key and auth code from HappyFox → Apps → Goodies → API.
+// Reference: https://support.happyfox.com/kb/article/1039-tickets-endpoint
 
 const hfApiConfigured = () => !!(process.env.HF_ACCOUNT && process.env.HF_API_KEY && process.env.HF_AUTH_CODE);
-const HF_PAGE_SIZE = 50, HF_MAX_PAGES = 200, HF_KEEP_CLOSED = 3000;
+const HF_PAGE_SIZE = 50;        // the API's maximum
+const HF_MAX_PAGES = 100;       // safety stop: 5,000 tickets per request
+const HF_KEEP_CLOSED = 3000;    // closed tickets kept for the recurring-issue analysis
+const HF_BACKFILL_DAYS = 90;    // closed history pulled on the first API sync
 let hfSyncRunning = false;
 
 function hfBaseUrl() {
@@ -352,7 +356,10 @@ async function hfGet(pathAndQuery, attempt = 1) {
     signal: AbortSignal.timeout(30000),
   });
   if ((res.status === 429 || res.status >= 500) && attempt < 4) {
-    const wait = (parseInt(res.headers.get('retry-after'), 10) || 2 ** attempt) * 1000;
+    // A 429 response body says how many seconds to wait (limit: 500 GETs per minute)
+    const text = await res.text().catch(() => '');
+    const seconds = parseInt(res.headers.get('retry-after'), 10) || parseInt((text.match(/(\d+)\s*sec/i) || [])[1], 10);
+    const wait = (seconds || 2 ** attempt) * 1000;
     await new Promise(r => setTimeout(r, Math.min(wait, 30000)));
     return hfGet(pathAndQuery, attempt + 1);
   }
@@ -391,18 +398,17 @@ function mapHfTicket(t) {
   };
 }
 
-async function fetchHappyFoxTickets() {
+// Page through /tickets/ with the given filter, e.g. 'status=_pending'
+async function fetchHappyFoxTickets(filter) {
   const tickets = [];
-  let fields = [];
   for (let page = 1; page <= HF_MAX_PAGES; page++) {
-    const body = await hfGet(`/api/1.1/json/tickets/?size=${HF_PAGE_SIZE}&page=${page}`);
+    const body = await hfGet(`/api/1.1/json/tickets/?${filter}&size=${HF_PAGE_SIZE}&page=${page}`);
     const rows = Array.isArray(body) ? body : (body.data || []);
-    if (page === 1 && rows[0]) fields = Object.keys(rows[0]);
     tickets.push(...rows.map(mapHfTicket).filter(t => t.id && t.title));
     const pageCount = body.page_info && body.page_info.page_count;
     if (!rows.length || (pageCount ? page >= pageCount : rows.length < HF_PAGE_SIZE)) break;
   }
-  return { tickets, fields };
+  return tickets;
 }
 
 async function runHfSync() {
@@ -412,17 +418,26 @@ async function runHfSync() {
   hfSyncRunning = true;
   try {
     console.log('[happyfox] Fetching tickets…');
-    const { tickets, fields } = await fetchHappyFoxTickets();
-    if (!tickets.length) throw new Error('HappyFox returned 0 tickets — the existing tickets were kept.');
-    console.log(`[happyfox] Ticket fields returned by the API: ${fields.join(', ')}`);
+    // Open tickets only — without a status filter the API returns every ticket ever created
+    const tickets = (await fetchHappyFoxTickets('status=_pending')).filter(t => !t.closed);
+    if (!tickets.length) throw new Error('HappyFox returned 0 open tickets — the existing tickets were kept.');
 
     const data = await readData();
     const prev = { hf: data.hf };
-
-    // The API lists pending tickets. Anything we had before that is no longer listed has
-    // been closed, so keep it (marked closed) for the recurring-issue analysis.
     const fetched = new Set(tickets.map(t => t.id));
-    const gone = (data.hf || []).filter(t => !fetched.has(t.id))
+
+    // First API sync: also pull recently closed tickets, so recurring issues show up straight away
+    let history = (data.hf || []).filter(t => !fetched.has(t.id));
+    if (data.hfSource !== 'api') {
+      const since = new Date(Date.now() - HF_BACKFILL_DAYS * 86400000).toISOString().slice(0, 10).replace(/-/g, '/');
+      const recent = await fetchHappyFoxTickets(`status=_all&q=${encodeURIComponent(`last-modified-on-or-after:"${since}"`)}`)
+        .catch(err => { console.warn('[happyfox] Closed-history backfill skipped:', err.message); return []; });
+      const known = new Set(history.map(t => t.id));
+      history = [...recent.filter(t => t.closed && !known.has(t.id)), ...history];
+    }
+
+    // Anything we had before that is no longer pending has been closed — keep it, marked closed
+    const gone = history.filter(t => !fetched.has(t.id))
       .map(t => (t.closed ? t : { ...t, closed: true, status: 'Closed', closedSeen: new Date().toISOString() }));
     data.hf = [...tickets, ...gone.slice(0, HF_KEEP_CLOSED)];
     data.hfLastSync = new Date().toISOString();

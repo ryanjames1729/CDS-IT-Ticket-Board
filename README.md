@@ -52,7 +52,7 @@ Ticket data is stored in Supabase (one JSON row in the `dashboard_data` table, `
 |--------|-----|
 | ConnectWise | Button on *Sync & Import*, or automatically with `AUTO_SYNC_HOURS`. |
 | Teams | Button, or automatically alongside ConnectWise. |
-| HappyFox | Through the HappyFox API once `HF_ACCOUNT`, `HF_API_KEY` and `HF_AUTH_CODE` are set (button, or automatically). A CSV export (Reports → Ticket Export) still works as a fallback. |
+| HappyFox | Through the HappyFox API once `HF_ACCOUNT`, `HF_API_KEY` and `HF_AUTH_CODE` are set (create the key under Apps → Goodies → API; then button, or automatically). A CSV export (Reports → Ticket Export) still works as a fallback. |
 
 `POST /api/sync-all` starts a sync of every configured source in the background and returns
 at once, so an outside scheduler can trigger it. The scheduler sends `CRON_SECRET` in an
