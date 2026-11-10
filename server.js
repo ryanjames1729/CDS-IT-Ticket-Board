@@ -32,6 +32,7 @@ const path      = require('path');
 const https     = require('https');
 const crypto    = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
+const { ISSUE_CATEGORIES, categorize } = require('./categories');
 
 const app    = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -128,6 +129,7 @@ const sendPage = (req, res) => res.sendFile(path.join(__dirname, 'index.html'));
 app.get('/', sendPage);
 app.get('/index.html', sendPage);
 app.get('/cds-logo.png', (req, res) => res.sendFile(path.join(__dirname, 'cds-logo.png')));
+app.get('/categories.js', (req, res) => res.sendFile(path.join(__dirname, 'categories.js')));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -192,6 +194,12 @@ function recordSnapshot(data, prev = {}) {
     critical: cw.filter(t => t.priority === 'P1' || t.priority === 'P2').length +
               hf.filter(t => t.priority === 'Critical' || t.priority === 'Urgent').length,
     unassigned: cw.filter(t => /(^|,)\s*unassigned\s*(,|$)/i.test(t.resources || 'Unassigned')).length,
+  });
+  // Open tickets per category, for the category trend chart
+  entry.cats = {};
+  [...cw.map(t => t.summary), ...hf.map(t => t.title)].forEach(title => {
+    const cat = categorize(title);
+    entry.cats[cat] = (entry.cats[cat] || 0) + 1;
   });
   entry.opened += opened;
   entry.closed += closed;
@@ -478,6 +486,40 @@ app.post('/api/sync-hf', async (req, res) => {
     res.json({ success: true, count: await runHfSync() });
   } catch (err) {
     res.status(err.status || 500).json({ success: false, error: err.message });
+  }
+});
+
+// ── Change markers ("we rolled out a new print queue on this day") ────────────
+
+const EVENT_CATEGORIES = new Set(['All', 'General', ...Object.keys(ISSUE_CATEGORIES)]);
+
+app.post('/api/events', async (req, res) => {
+  const { date, label, category } = req.body || {};
+  const text = String(label || '').trim().slice(0, 60);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || isNaN(Date.parse(date))) return res.status(400).json({ success: false, error: 'Pick a valid date.' });
+  if (!text) return res.status(400).json({ success: false, error: 'Say what changed.' });
+  if (!EVENT_CATEGORIES.has(category)) return res.status(400).json({ success: false, error: 'Unknown category.' });
+  try {
+    const data = await readData();
+    const events = Array.isArray(data.events) ? data.events : [];
+    if (events.length >= 200) return res.status(400).json({ success: false, error: 'Too many markers — remove some first.' });
+    events.push({ id: crypto.randomUUID(), date, label: text, category });
+    data.events = events;
+    await writeData(data);
+    res.json({ success: true, events });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/events/:id', async (req, res) => {
+  try {
+    const data = await readData();
+    data.events = (Array.isArray(data.events) ? data.events : []).filter(e => e.id !== req.params.id);
+    await writeData(data);
+    res.json({ success: true, events: data.events });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
