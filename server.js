@@ -12,10 +12,15 @@
  *   POST /api/upload-hf     → accepts HappyFox CSV file, parses, updates data
  *   POST /api/update-dedup  → accepts updated dedup stats from the client
  *   POST /api/sync-teams    → pulls messages from Teams chat via Graph API
- *   POST /api/sync-all      → starts a background ConnectWise + Teams sync (for cron jobs)
+ *   POST /api/sync-hf       → pulls tickets from the HappyFox API
+ *   POST /api/sync-all      → starts a background ConnectWise + HappyFox + Teams sync (for cron jobs)
+ *   POST /api/login         → exchanges the dashboard password for a session cookie
+ *   POST /api/logout        → ends the session
+ *
+ * Every /api route except login/logout requires a signed session cookie.
  *
  * Automation:
- *   Set AUTO_SYNC_HOURS to re-sync ConnectWise and Teams on a schedule.
+ *   Set AUTO_SYNC_HOURS to re-sync ConnectWise, HappyFox and Teams on a schedule.
  *   Every sync records a daily snapshot in data.history for the trend chart.
  */
 
@@ -25,6 +30,7 @@ const multer    = require('multer');
 const { parse } = require('csv-parse/sync');
 const path      = require('path');
 const https     = require('https');
+const crypto    = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 
 const app    = express();
@@ -38,7 +44,84 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
-app.use(express.json());
+app.disable('x-powered-by');
+app.set('trust proxy', 1);             // behind Render's proxy: lets req.secure / req.ip work
+app.use(express.json({ limit: '100kb' }));
+app.use((req, res, next) => {
+  res.set({ 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer' });
+  next();
+});
+
+// ── Authentication ────────────────────────────────────────────────────────────
+// The password lives only in the DASHBOARD_PASSWORD environment variable. A correct
+// login sets an HttpOnly cookie signed with a key derived from that password, so
+// changing the password signs everyone out.
+
+const PASSWORD       = process.env.DASHBOARD_PASSWORD || '';
+const SESSION_COOKIE = 'cds_session';
+const SESSION_DAYS   = 30;
+const SESSION_KEY    = crypto.createHash('sha256')
+  .update(`cds-dashboard-session:${process.env.SESSION_SECRET || ''}:${PASSWORD}`).digest();
+
+const sha256 = v => crypto.createHash('sha256').update(String(v)).digest();
+const safeEqual = (a, b) => crypto.timingSafeEqual(sha256(a), sha256(b));
+const signSession = expires =>
+  `${expires}.${crypto.createHmac('sha256', SESSION_KEY).update(String(expires)).digest('base64url')}`;
+
+function hasSession(req) {
+  const match = (req.headers.cookie || '').match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE}=([^;]+)`));
+  if (!match || !PASSWORD) return false;
+  const expires = parseInt(match[1], 10);
+  return expires > Date.now() && safeEqual(match[1], signSession(expires));
+}
+
+function setSessionCookie(req, res, value, maxAgeSeconds) {
+  res.set('Set-Cookie', `${SESSION_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}` +
+    (req.secure ? '; Secure' : ''));
+}
+
+// Slow down password guessing: 8 wrong attempts per address, then a 15-minute wait
+const LOGIN_MAX_FAILS = 8, LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const loginFails = new Map();
+
+app.post('/api/login', (req, res) => {
+  if (!PASSWORD) {
+    return res.status(503).json({ success: false, error: 'DASHBOARD_PASSWORD is not set on the server, so nobody can sign in yet.' });
+  }
+  const now = Date.now();
+  let rec = loginFails.get(req.ip);
+  if (rec && rec.resetAt < now) { loginFails.delete(req.ip); rec = null; }
+  if (rec && rec.count >= LOGIN_MAX_FAILS) {
+    const minutes = Math.ceil((rec.resetAt - now) / 60000);
+    return res.status(429).json({ success: false, error: `Too many attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.` });
+  }
+  if (!safeEqual((req.body && req.body.password) || '', PASSWORD)) {
+    if (!rec) { rec = { count: 0, resetAt: now + LOGIN_WINDOW_MS }; loginFails.set(req.ip, rec); }
+    rec.count++;
+    if (loginFails.size > 5000) loginFails.clear();
+    return res.status(401).json({ success: false, error: 'Incorrect password. Please try again.' });
+  }
+  loginFails.delete(req.ip);
+  setSessionCookie(req, res, signSession(now + SESSION_DAYS * 86400000), SESSION_DAYS * 86400);
+  res.json({ success: true });
+});
+
+app.post('/api/logout', (req, res) => {
+  setSessionCookie(req, res, '', 0);
+  res.json({ success: true });
+});
+
+// Everything else under /api needs a session. A scheduler may call /api/sync-all
+// with the CRON_SECRET instead (x-cron-secret header).
+app.use('/api', (req, res, next) => {
+  const cron = process.env.CRON_SECRET;
+  if (req.path === '/sync-all' && cron && safeEqual(req.get('x-cron-secret') || '', cron)) return next();
+  if (!PASSWORD) {
+    return res.status(503).json({ success: false, code: 'not_configured', error: 'DASHBOARD_PASSWORD is not set on the server, so the dashboard is locked. Add it to the environment and restart.' });
+  }
+  if (hasSession(req)) return next();
+  res.status(401).json({ success: false, code: 'login_required', error: 'Please sign in.' });
+});
 
 // Serve only the dashboard page and its logo — not the server source or config files
 const sendPage = (req, res) => res.sendFile(path.join(__dirname, 'index.html'));
@@ -78,7 +161,7 @@ const HF_CLOSED_STATUSES = new Set(['closed', 'resolved', 'completed', 'archived
 const HISTORY_DAYS = 400;
 
 const openCw = list => (list || []).filter(t => !t.closed);
-const openHf = list => (list || []).filter(t => !HF_CLOSED_STATUSES.has((t.status || '').toLowerCase()));
+const openHf = list => (list || []).filter(t => !t.closed && !HF_CLOSED_STATUSES.has((t.status || '').toLowerCase()));
 
 // Today's date in the school's time zone, as YYYY-MM-DD
 function localDate() {
@@ -178,6 +261,8 @@ app.get('/api/data', async (req, res) => {
       ...data,
       _server: {
         cwSyncing: cwSyncRunning,
+        hfSyncing: hfSyncRunning,
+        hfApiConfigured: hfApiConfigured(),
         autoSyncHours: AUTO_SYNC_HOURS,
         nextAutoSync: nextAutoSync ? nextAutoSync.toISOString() : null,
       },
@@ -233,6 +318,7 @@ app.post('/api/upload-hf', upload.single('csv'), async (req, res) => {
     const prev = { hf: data.hf };
     data.hf = tickets;
     data.hfLastSync = new Date().toISOString();
+    data.hfSource = 'csv';
     data.lastUpdated = new Date().toISOString();
     recordSnapshot(data, prev);
     await writeData(data);
@@ -242,6 +328,126 @@ app.post('/api/upload-hf', upload.single('csv'), async (req, res) => {
   } catch (err) {
     console.error('[server] HF parse error:', err.message);
     res.status(500).json({ success: false, error: `CSV parse error: ${err.message}` });
+  }
+});
+
+// ── HappyFox API sync ─────────────────────────────────────────────────────────
+// Needs HF_ACCOUNT (the "yourschool" in yourschool.happyfox.com, or a full URL),
+// plus an API key and auth code from HappyFox → Manage → Integrations → API.
+
+const hfApiConfigured = () => !!(process.env.HF_ACCOUNT && process.env.HF_API_KEY && process.env.HF_AUTH_CODE);
+const HF_PAGE_SIZE = 50, HF_MAX_PAGES = 200, HF_KEEP_CLOSED = 3000;
+let hfSyncRunning = false;
+
+function hfBaseUrl() {
+  const account = process.env.HF_ACCOUNT.trim().replace(/\/+$/, '');
+  if (/^https?:\/\//i.test(account)) return account;
+  return `https://${account.includes('.') ? account : account + '.happyfox.com'}`;
+}
+
+async function hfGet(pathAndQuery, attempt = 1) {
+  const auth = Buffer.from(`${process.env.HF_API_KEY}:${process.env.HF_AUTH_CODE}`).toString('base64');
+  const res = await fetch(hfBaseUrl() + pathAndQuery, {
+    headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
+    signal: AbortSignal.timeout(30000),
+  });
+  if ((res.status === 429 || res.status >= 500) && attempt < 4) {
+    const wait = (parseInt(res.headers.get('retry-after'), 10) || 2 ** attempt) * 1000;
+    await new Promise(r => setTimeout(r, Math.min(wait, 30000)));
+    return hfGet(pathAndQuery, attempt + 1);
+  }
+  if (res.status === 401 || res.status === 403) throw new Error('HappyFox rejected the API key / auth code (HTTP ' + res.status + ').');
+  if (res.status === 404) throw new Error('HappyFox API not found at ' + hfBaseUrl() + ' — check HF_ACCOUNT.');
+  if (!res.ok) throw new Error(`HappyFox API error (HTTP ${res.status}).`);
+  return res.json();
+}
+
+// HappyFox returns nested objects ({ name: "High" }) for most fields; accept plain strings too
+const hfName = v => (v == null ? '' : typeof v === 'object' ? String(v.name || v.email || '') : String(v));
+
+// API timestamps have no zone and are UTC — make that explicit for the browser
+function hfTime(v) {
+  if (!v) return '';
+  const m = String(v).match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2})?)(?:\.\d+)?$/);
+  return m ? `${m[1]}T${m[2]}Z` : String(v);
+}
+
+function mapHfTicket(t) {
+  const behavior = t.status && typeof t.status === 'object' ? String(t.status.behavior || '') : '';
+  const status = hfName(t.status) || 'New';
+  return {
+    id:       String(t.display_id || t.id || '').replace(/^#/, ''),
+    title:    t.subject || '',
+    priority: hfName(t.priority) || 'Low',
+    status,
+    assignee: hfName(t.assigned_to),
+    contact:  hfName(t.user),
+    created:  hfTime(t.created_at),
+    updated:  hfTime(t.last_updated_at || t.last_modified),
+    category: hfName(t.category),
+    closed:   behavior === 'completed' || HF_CLOSED_STATUSES.has(status.toLowerCase()),
+    unresponded: t.unresponded === true,
+    slaBreaches: Number(t.sla_breaches) || 0,
+  };
+}
+
+async function fetchHappyFoxTickets() {
+  const tickets = [];
+  let fields = [];
+  for (let page = 1; page <= HF_MAX_PAGES; page++) {
+    const body = await hfGet(`/api/1.1/json/tickets/?size=${HF_PAGE_SIZE}&page=${page}`);
+    const rows = Array.isArray(body) ? body : (body.data || []);
+    if (page === 1 && rows[0]) fields = Object.keys(rows[0]);
+    tickets.push(...rows.map(mapHfTicket).filter(t => t.id && t.title));
+    const pageCount = body.page_info && body.page_info.page_count;
+    if (!rows.length || (pageCount ? page >= pageCount : rows.length < HF_PAGE_SIZE)) break;
+  }
+  return { tickets, fields };
+}
+
+async function runHfSync() {
+  const fail = (message, status) => Object.assign(new Error(message), { status });
+  if (!hfApiConfigured()) throw fail('HappyFox API not configured — add HF_ACCOUNT, HF_API_KEY and HF_AUTH_CODE to the environment, or upload a CSV instead.', 400);
+  if (hfSyncRunning) throw fail('A HappyFox sync is already running.', 409);
+  hfSyncRunning = true;
+  try {
+    console.log('[happyfox] Fetching tickets…');
+    const { tickets, fields } = await fetchHappyFoxTickets();
+    if (!tickets.length) throw new Error('HappyFox returned 0 tickets — the existing tickets were kept.');
+    console.log(`[happyfox] Ticket fields returned by the API: ${fields.join(', ')}`);
+
+    const data = await readData();
+    const prev = { hf: data.hf };
+
+    // The API lists pending tickets. Anything we had before that is no longer listed has
+    // been closed, so keep it (marked closed) for the recurring-issue analysis.
+    const fetched = new Set(tickets.map(t => t.id));
+    const gone = (data.hf || []).filter(t => !fetched.has(t.id))
+      .map(t => (t.closed ? t : { ...t, closed: true, status: 'Closed', closedSeen: new Date().toISOString() }));
+    data.hf = [...tickets, ...gone.slice(0, HF_KEEP_CLOSED)];
+    data.hfLastSync = new Date().toISOString();
+    data.hfSource = 'api';
+    data.lastUpdated = new Date().toISOString();
+    delete data.hfLastError;
+    recordSnapshot(data, prev);
+    await writeData(data);
+
+    console.log(`[happyfox] Saved ${tickets.length} tickets (${gone.length} closed kept for history).`);
+    return tickets.length;
+  } catch (err) {
+    console.error('[happyfox] Error:', err.message);
+    await noteSyncError('hfLastError', err);
+    throw err;
+  } finally {
+    hfSyncRunning = false;
+  }
+}
+
+app.post('/api/sync-hf', async (req, res) => {
+  try {
+    res.json({ success: true, count: await runHfSync() });
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, error: err.message });
   }
 });
 
@@ -361,7 +567,7 @@ app.post('/api/sync-teams', async (req, res) => {
 });
 
 // ── Automatic sync ────────────────────────────────────────────────────────────
-// AUTO_SYNC_HOURS=6 re-syncs ConnectWise and Teams every 6 hours while the server runs.
+// AUTO_SYNC_HOURS=6 re-syncs ConnectWise, HappyFox and Teams every 6 hours while the server runs.
 // Hosts that sleep when idle (e.g. Render's free tier) pause timers too — there, point a
 // scheduled job at POST /api/sync-all instead, which also wakes the server up.
 
@@ -372,6 +578,9 @@ async function syncEverything(reason) {
   console.log(`[auto-sync] Starting (${reason})…`);
   if (process.env.CW_USERNAME && process.env.CW_PASSWORD) {
     await runCwSync().catch(() => {});      // errors are logged and stored by runCwSync
+  }
+  if (hfApiConfigured()) {
+    await runHfSync().catch(() => {});
   }
   if (teamsConfigured()) {
     await runTeamsSync().catch(() => {});
@@ -390,13 +599,9 @@ function scheduleAutoSync() {
 }
 
 // Kick off a background sync and return straight away (safe for cron services with short timeouts).
-// If CRON_SECRET is set, the caller must send it as the x-cron-secret header or ?key= parameter.
+// Callers need a signed-in session, or the CRON_SECRET in an x-cron-secret header.
 app.post('/api/sync-all', (req, res) => {
-  const secret = process.env.CRON_SECRET;
-  if (secret && req.get('x-cron-secret') !== secret && req.query.key !== secret) {
-    return res.status(401).json({ success: false, error: 'Invalid or missing cron secret.' });
-  }
-  if (cwSyncRunning) return res.status(409).json({ success: false, error: 'A sync is already running.' });
+  if (cwSyncRunning || hfSyncRunning) return res.status(409).json({ success: false, error: 'A sync is already running.' });
   syncEverything('sync-all request');
   res.status(202).json({ success: true, message: 'Sync started in the background.' });
 });
@@ -405,6 +610,7 @@ app.post('/api/sync-all', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`\n🖥️  CDS IT Dashboard running at http://localhost:${PORT}`);
+  if (!PASSWORD) console.warn('   ⚠️  DASHBOARD_PASSWORD is not set — the dashboard is locked until it is.');
   console.log(`   Storage:  Supabase (${process.env.SUPABASE_URL})`);
   console.log(`   Auto-sync: ${AUTO_SYNC_HOURS ? `every ${AUTO_SYNC_HOURS} h` : 'off (set AUTO_SYNC_HOURS to enable)'}\n`);
   scheduleAutoSync();

@@ -485,41 +485,11 @@
   }
 </style>
 
-<script>
-  /* ── Password Protection ─────────────────────────────────────────────── */
-  (function() {
-    if (localStorage.getItem('cds_auth') === '1') {
-      // Already authenticated — hide the overlay as soon as DOM is ready
-      document.addEventListener('DOMContentLoaded', function() {
-        document.getElementById('pw-overlay').style.display = 'none';
-      });
-      return;
-    }
-    document.addEventListener('DOMContentLoaded', function() {
-      var overlay = document.getElementById('pw-overlay');
-      var input   = document.getElementById('pw-input');
-      var btn     = document.getElementById('pw-btn');
-      var err     = document.getElementById('pw-error');
-      function check() {
-        if (input.value === atob('Q0RTMSo0dQ==')) {
-          localStorage.setItem('cds_auth', '1');
-          overlay.style.display = 'none';
-        } else {
-          err.style.display = 'block';
-          input.value = '';
-          input.focus();
-        }
-      }
-      btn.addEventListener('click', check);
-      input.addEventListener('keydown', function(e) { if (e.key === 'Enter') check(); });
-    });
-  })();
-</script>
 </head>
 <body>
 
 <!-- ── Password Overlay ──────────────────────────────────────────────────── -->
-<div id="pw-overlay">
+<div id="pw-overlay" style="display:none">
   <div id="pw-box">
     <div id="pw-logo">
       <img src="/cds-logo.png" alt="CDS" onerror="this.style.display='none';document.getElementById('pwLogoFallback').style.display='block'">
@@ -527,9 +497,11 @@
     </div>
     <h2>Carolina Day School</h2>
     <p>IT Ticket Dashboard — Authorized Access Only</p>
-    <input id="pw-input" type="password" placeholder="Password" autofocus />
-    <button id="pw-btn">Unlock Dashboard</button>
-    <div id="pw-error">Incorrect password. Please try again.</div>
+    <form id="pw-form" onsubmit="return signIn(event)">
+      <input id="pw-input" type="password" placeholder="Password" autocomplete="current-password" />
+      <button id="pw-btn" type="submit">Unlock Dashboard</button>
+    </form>
+    <div id="pw-error"></div>
     <div id="pw-brand">Powered by Pixel &amp; Pine Labs</div>
   </div>
 </div>
@@ -556,6 +528,7 @@
       <button class="nav-item active" data-page="home" onclick="showPage('home')">📊 Dashboard</button>
       <button class="nav-item" data-page="tickets" onclick="showPage('tickets')">🎫 Tickets</button>
       <button class="nav-item" data-page="sync" onclick="showPage('sync')">⚡ Sync &amp; Import</button>
+      <button class="nav-item" onclick="signOut()" title="Sign out of the dashboard">⎋ Sign out</button>
     </nav>
     <div class="hamburger" id="hamburger" onclick="toggleHamburger()">
       <span></span><span></span><span></span>
@@ -569,10 +542,10 @@
 <section class="page active" id="page-home">
 <div class="main">
 
-  <!-- ── Sample-data warning (shown only when no live data is loaded) ───── -->
+  <!-- ── Empty-state notice (shown only when no ticket data is loaded) ──── -->
   <div id="sampleBanner" style="display:none;background:#fffaf0;border-radius:12px;padding:12px 20px;margin-bottom:12px;border-left:4px solid #dd6b20;box-shadow:0 1px 4px rgba(0,0,0,0.08);align-items:center;gap:12px;">
-    <span style="font-size:1.1rem">🧪</span>
-    <div style="font-size:0.84rem;color:#7b341e;"><strong>Sample data.</strong><span id="sampleBannerText"></span></div>
+    <span style="font-size:1.1rem">📭</span>
+    <div style="font-size:0.84rem;color:#7b341e;"><strong id="sampleBannerTitle">No ticket data.</strong><span id="sampleBannerText"></span></div>
   </div>
 
   <!-- ── Daily briefing (written from the live data) ────────────────────── -->
@@ -600,9 +573,9 @@
       <div class="sub">Need immediate attention</div>
     </div>
     <div class="card purple" onclick="openTickets({flag:'overdue'})" title="Show these tickets">
-      <div class="label">Past SLA Target</div>
+      <div class="label">Past Response SLA</div>
       <div class="value" id="cardOverdue">—</div>
-      <div class="sub">CW tickets over their priority window</div>
+      <div class="sub">CW tickets still waiting for a first response</div>
     </div>
     <div class="card orange" onclick="openTickets({flag:'unassigned'})" title="Show these tickets">
       <div class="label">CW Unassigned</div>
@@ -733,7 +706,7 @@
       <div class="chart-wrap" style="height:240px"><canvas id="cwPriorityChart"></canvas></div>
     </div>
     <div class="chart-card">
-      <h3>CW — Workload by Assignee <span class="badge">top 8 · red = past SLA</span></h3>
+      <h3>CW — Workload by Assignee <span class="badge">top 8 · red = past response SLA</span></h3>
       <div class="chart-wrap" style="height:240px"><canvas id="cwAssigneeChart"></canvas></div>
     </div>
   </div>
@@ -892,12 +865,16 @@
     <!-- HappyFox -->
     <div class="import-card">
       <h3>🟡 HappyFox</h3>
-      <p>Upload a CSV export from HappyFox. Go to HappyFox → Reports → Ticket Export to download.</p>
-      <label class="import-btn gold" style="cursor:pointer;">
-        ↑ Upload HappyFox CSV
-        <input type="file" accept=".csv,.CSV" style="display:none" id="hfFileInput" onchange="uploadHFCSV(this)">
-      </label>
+      <p id="hfCardText">Pull tickets straight from the HappyFox API, or upload a CSV export (HappyFox → Reports → Ticket Export).</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="import-btn gold" id="hfSyncBtn" onclick="syncHappyFox()">↻ Sync HappyFox</button>
+        <label class="import-btn" style="cursor:pointer;background:rgba(255,255,255,0.1);color:#e2e8f0;">
+          ↑ Upload CSV
+          <input type="file" accept=".csv,.CSV" style="display:none" id="hfFileInput" onchange="uploadHFCSV(this)">
+        </label>
+      </div>
       <div class="import-status" id="hfUploadStatus"></div>
+      <div class="import-error" id="hfLastError" style="display:none"></div>
     </div>
 
     <!-- Microsoft Teams -->
@@ -931,7 +908,7 @@
           <strong style="font-size:0.85rem;color:#2d3748;">HappyFox</strong>
           <span style="background:#c6f6d5;color:#276749;font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:20px;">Live</span>
         </div>
-        <p style="font-size:0.78rem;color:#718096;line-height:1.5;margin:0 0 8px;">Upload a CSV export from HappyFox → Reports → Ticket Export. Upload as often as needed to keep data fresh.</p>
+        <p style="font-size:0.78rem;color:#718096;line-height:1.5;margin:0 0 8px;" id="hfSourceText">Synced through the HappyFox API when it is configured, or from a CSV export.</p>
         <div style="font-size:0.72rem;color:#a0aec0;">Last synced: <span id="hfLastSync">—</span></div>
       </div>
 
@@ -962,12 +939,11 @@
 
 <script>
 // ═══════════════════════════════════════════════════════════════════════════
-// SECTION 1 — DEFAULT DATA (embedded snapshot — overwritten by server data)
+// SECTION 1 — TICKET DATA (loaded from the server after sign-in)
 // ═══════════════════════════════════════════════════════════════════════════
 
-let CW_TICKETS = [{"num":"1161018","summary":"Portable microphone and speaker? DUE 3-20-2026","type":"Request","priority":"P4","status":"Reassign Dispatcher","resources":"Unassigned","contact":"Becky Vlachoynnis","entered":"3/18/26"},{"num":"1161016","summary":"Printing and password","type":"Incident","priority":"P4","status":"Reassign Dispatcher","resources":"Scott Clark","contact":"Monica Antonazzo","entered":"3/18/26"},{"num":"1161014","summary":"Ipad request","type":"Request","priority":"P4","status":"Reassign Dispatcher","resources":"Scott Clark","contact":"Jennifer Taylor","entered":"3/18/26"},{"num":"1161012","summary":"printer","type":"Incident","priority":"P4","status":"Reassign Dispatcher","resources":"Scott Clark","contact":"Anne Scarbrough","entered":"3/18/26"},{"num":"1161009","summary":"PA speaker in weight room is not working","type":"Incident","priority":"P4","status":"Reassign Dispatcher","resources":"Scott Clark","contact":"Chris Atwater","entered":"3/18/26"},{"num":"1161000","summary":"Printing Woes","type":"Incident","priority":"P4","status":"Reassign Dispatcher","resources":"Scott Clark","contact":"Margee Husemann","entered":"3/18/26"},{"num":"1160994","summary":"Pickup IT testing equipment today from US 3-18-2026","type":"Incident","priority":"P4","status":"Reassign Dispatcher","resources":"Scott Clark","contact":"Sandy Pyeatt","entered":"3/18/26"},{"num":"1160993","summary":"Mic and audio setup for faculty and staff meeting @4pm","type":"Request","priority":"P4","status":"Reassign Dispatcher","resources":"Scott Clark","contact":"Brooke McIntosh","entered":"3/18/26"},{"num":"1160970","summary":"Enroll Michael Lomuscio's Verizon Phone in MDM","type":"Request","priority":"P2","status":"Reassign Dispatcher","resources":"Scott Clark","contact":"Michael Lomuscio","entered":"3/18/26"},{"num":"1160966","summary":"Auditorium speakers not working","type":"Incident","priority":"P4","status":"Assigned","resources":"Logan Buell","contact":"Anne Scarbrough","entered":"3/18/26"},{"num":"1160962","summary":"Urgent: Set up iPad by EOD 3/18","type":"Request","priority":"P4","status":"In Progress","resources":"Logan Buell","contact":"Ryan James","entered":"3/17/26"},{"num":"1160951","summary":"Badge Request","type":"Request","priority":"P4","status":"Reassign Dispatcher","resources":"Unassigned","contact":"Mylan Hutchins","entered":"3/18/26"},{"num":"1160923","summary":"Laptop won't connect to WiFi","type":"Incident","priority":"P3","status":"In Progress","resources":"Danielle Shackley","contact":"Staff Member","entered":"3/17/26"},{"num":"1160900","summary":"Poor WiFi Connection in Key 3rd grade","type":"Incident","priority":"P2","status":"In Progress","resources":"Logan Buell","contact":"Mary Jo van Dalen","entered":"3/17/26"},{"num":"1160885","summary":"Cursive Wizard App for every Chromebook","type":"Request","priority":"P3","status":"In Progress","resources":"Ryan James","contact":"Mary Jo van Dalen","entered":"3/17/26"},{"num":"1160850","summary":"Email forwarding setup","type":"Request","priority":"P4","status":"Child Ticket","resources":"Danielle Shackley","contact":"Admin Staff","entered":"3/16/26"},{"num":"1160820","summary":"Computer login issues","type":"Incident","priority":"P3","status":"Child Ticket","resources":"Logan Buell","contact":"Teacher","entered":"3/11/26"},{"num":"1160800","summary":"Printer offline in admin office","type":"Incident","priority":"P3","status":"Waiting Vendor Response","resources":"Scott Clark","contact":"Office Staff","entered":"3/11/26"},{"num":"1160775","summary":"New teacher laptop setup","type":"Request","priority":"P4","status":"Child Ticket","resources":"Danielle Shackley","contact":"HR Dept","entered":"3/10/26"},{"num":"1160750","summary":"Projector bulb replacement needed","type":"Request","priority":"P4","status":"Waiting Vendor Response","resources":"Unassigned","contact":"Math Dept","entered":"3/10/26"},{"num":"1160720","summary":"Google Workspace license issue","type":"Incident","priority":"P3","status":"In Progress","resources":"Logan Buell, Danielle Shackley","contact":"Admin","entered":"3/10/26"},{"num":"1160700","summary":"Network switch replacement","type":"Incident","priority":"P2","status":"In Progress","resources":"Logan Buell","contact":"IT Admin","entered":"3/10/26"},{"num":"1160680","summary":"iPad MDM enrollment batch","type":"Request","priority":"P3","status":"Child Ticket","resources":"Scott Clark","contact":"Tech Dept","entered":"3/9/26"},{"num":"1160650","summary":"Staff email migration","type":"Request","priority":"P4","status":"Child Ticket","resources":"Danielle Shackley","contact":"Admin","entered":"3/9/26"},{"num":"1160620","summary":"Chromebook charging cart repair","type":"Incident","priority":"P3","status":"Waiting Vendor Response","resources":"Unassigned","contact":"Library","entered":"3/9/26"}];
-
-let HF_TICKETS = [{"id":"IT00009963","title":"Fwd: Adding Nik Holmberg to All-Star","priority":"Low","status":"Pending"},{"id":"IT00009179","title":"Harper Johnson 7.2","priority":"Low","status":"Pending"},{"id":"IT00009927","title":"Cursive Wizard App for every Chromebook","priority":"Low","status":"Pending"},{"id":"IT00009425","title":"My laptop","priority":"Low","status":"Pending"},{"id":"IT00009621","title":"Computer Login","priority":"Low","status":"New"},{"id":"IT00009189","title":"Computer","priority":"Low","status":"New"},{"id":"IT00009194","title":"Key 7th Leena Bhakta - computer","priority":"Low","status":"New"},{"id":"IT00009656","title":"National Spanish and French Exam","priority":"Medium","status":"Pending"},{"id":"IT00009922","title":"Fwd: sub laptop","priority":"Critical","status":"Pending"},{"id":"IT00009869","title":"Fwd: Computer issues","priority":"Low","status":"Pending"},{"id":"IT00009892","title":"Clicker for Ms. B's computer","priority":"Low","status":"New"},{"id":"IT00009881","title":"default app for .pdf files","priority":"Low","status":"Pending"},{"id":"IT00009876","title":"Fwd: Classroom Tech Issues","priority":"Low","status":"Pending"},{"id":"IT00009870","title":"Key Laptop student repair","priority":"High","status":"Pending"},{"id":"IT00009865","title":"Fwd: Email Issue","priority":"Low","status":"Pending"},{"id":"IT00009860","title":"Schedule a Zoom or Google Meet","priority":"Medium","status":"Pending"},{"id":"IT00009855","title":"Requesting New Computer","priority":"High","status":"Pending"},{"id":"IT00009850","title":"Printer offline","priority":"Low","status":"Pending"},{"id":"IT00009845","title":"Chromebook battery drain","priority":"Low","status":"Pending"},{"id":"IT00009840","title":"Google Drive sync issue","priority":"Medium","status":"Pending"},{"id":"IT00009835","title":"SMART Board not responding","priority":"Low","status":"Pending"},{"id":"IT00009830","title":"VPN access for remote work","priority":"High","status":"Pending"},{"id":"IT00009825","title":"Audio not working in classroom","priority":"Low","status":"Pending"},{"id":"IT00009820","title":"Password expired - locked out","priority":"Low","status":"New"},{"id":"IT00009815","title":"Software license request","priority":"Medium","status":"Pending"}];
+let CW_TICKETS = [];
+let HF_TICKETS = [];
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SECTION 2 — STATE, HELPERS, SERVER DATA LOADING
@@ -976,12 +952,12 @@ let HF_TICKETS = [{"id":"IT00009963","title":"Fwd: Adding Nik Holmberg to All-St
 let TEAMS_MESSAGES = [];   // Teams chat messages (systemic analysis only)
 let HISTORY        = [];   // daily snapshots recorded by the server on each sync
 let SERVER_META    = null; // sync/scheduler state reported by the server
-let USING_SAMPLE   = true; // true until real ticket data arrives from the server
+let NO_DATA        = true; // true until ticket data arrives from the server
 let M              = null; // analysed ticket model — rebuilt by buildModel()
 
 // Statuses treated as "closed" — excluded from display but kept for systemic analysis
 const HF_CLOSED_STATUSES = new Set(['closed', 'resolved', 'completed', 'archived', 'solved']);
-const isHFOpen = t => !HF_CLOSED_STATUSES.has((t.status || '').toLowerCase());
+const isHFOpen = t => !t.closed && !HF_CLOSED_STATUSES.has((t.status || '').toLowerCase());
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const STALE_AFTER_DAYS = 3;       // header warns when ticket data is older than this
@@ -996,29 +972,43 @@ function esc(s) {
 function parseTicketDate(s) {
   if (!s) return null;
   const str = String(s).trim();
-  let m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})\b/);
-  if (m) return new Date(+m[3] < 100 ? 2000 + +m[3] : +m[3], m[1] - 1, +m[2]);
-  m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  let m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})(?:,?\s+(\d{1,2}):(\d{2})(?::\d{2})?\s*([AP]M)?)?/i);
+  if (m) {
+    let hour = +(m[4] || 0);
+    if (m[6]) hour = (hour % 12) + (/p/i.test(m[6]) ? 12 : 0);
+    return new Date(+m[3] < 100 ? 2000 + +m[3] : +m[3], m[1] - 1, +m[2], hour, +(m[5] || 0));
+  }
+  m = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (m) return new Date(+m[1], m[2] - 1, +m[3]);
-  const t = Date.parse(str);
+  const t = Date.parse(/^\d{4}-\d{2}-\d{2} \d/.test(str) ? str.replace(' ', 'T') : str);
   return isNaN(t) ? null : new Date(t);
 }
+const hasClockTime = s => /\d:\d\d/.test(String(s || ''));
 
 function calendarDays(from, to) {
   return Math.max(0, Math.floor((to - from) / DAY_MS));
 }
 
-// Whole weekdays elapsed after `from` up to `to` (SLA clocks don't run on weekends)
-function businessDays(from, to) {
-  const total = calendarDays(from, to);
-  let days = Math.floor(total / 7) * 5;
-  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate());
-  d.setDate(d.getDate() + Math.floor(total / 7) * 7);
-  for (let i = 0; i < total % 7; i++) {
-    d.setDate(d.getDate() + 1);
-    if (d.getDay() !== 0 && d.getDay() !== 6) days++;
+// Business hours elapsed between two moments (Mon–Fri, within BUSINESS_DAY).
+// A ticket stamped with a date but no time is treated as arriving at close of business,
+// so its clock starts the next working morning — it is never flagged early.
+function businessHours(from, to, dateOnly) {
+  const at = (day, h) => { const d = new Date(day); d.setHours(Math.floor(h), Math.round((h % 1) * 60), 0, 0); return d; };
+  const day = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const begin = dateOnly ? at(day, BUSINESS_DAY.end) : from;
+  let hours = 0;
+  for (let i = 0; i < 1500 && day <= to; i++, day.setDate(day.getDate() + 1)) {
+    if (day.getDay() === 0 || day.getDay() === 6) continue;
+    const a = Math.max(at(day, BUSINESS_DAY.start), begin), b = Math.min(at(day, BUSINESS_DAY.end), to);
+    if (b > a) hours += (b - a) / 3600000;
   }
-  return days;
+  return hours;
+}
+
+// "5 business hours" up to two working days, then "4 business days"
+function fmtBusiness(hours) {
+  const perDay = BUSINESS_DAY.end - BUSINESS_DAY.start;
+  return hours < perDay * 2 ? plural(hours, 'business hour') : plural(Math.round(hours / perDay), 'business day');
 }
 
 function fmtTs(isoStr) {
@@ -1038,15 +1028,16 @@ function updateSyncStatus(data, serverReachable) {
   const dot = document.getElementById('syncDot'), label = document.getElementById('syncLabel');
   const header = document.getElementById('last-updated');
   const sample = document.getElementById('sampleBanner');
-  sample.style.display = USING_SAMPLE ? 'flex' : 'none';
+  sample.style.display = NO_DATA ? 'flex' : 'none';
 
-  if (USING_SAMPLE) {
+  if (NO_DATA) {
     dot.classList.add('stale');
-    label.textContent = 'Sample data';
+    label.textContent = serverReachable ? 'No data yet' : 'Offline';
     header.textContent = serverReachable ? 'No ticket data synced yet' : 'Server unreachable';
+    document.getElementById('sampleBannerTitle').textContent = serverReachable ? 'No tickets yet.' : 'Can’t reach the server.';
     document.getElementById('sampleBannerText').textContent = serverReachable
-      ? ' No tickets have been synced yet, so the built-in March 2026 sample is shown. Use Sync & Import to load live data.'
-      : ' The server could not be reached, so the built-in March 2026 sample is shown instead of live tickets.';
+      ? ' Nothing has been synced so far — open Sync & Import to pull tickets from ConnectWise and HappyFox.'
+      : ' Ticket data could not be loaded. Check that the server is running, then reload the page.';
     return;
   }
 
@@ -1076,9 +1067,9 @@ function updateSyncPage(data) {
   const auto = document.getElementById('autoSyncInfo');
   if (auto) {
     auto.textContent = meta.autoSyncHours > 0
-      ? `Automatic sync is on — every ${meta.autoSyncHours} hour${meta.autoSyncHours === 1 ? '' : 's'}` +
+      ? `Automatic sync is on — ConnectWise${meta.hfApiConfigured ? ', HappyFox' : ''} and Teams every ${meta.autoSyncHours} hour${meta.autoSyncHours === 1 ? '' : 's'}` +
         (meta.nextAutoSync ? ` · next run ${fmtTs(meta.nextAutoSync)}` : '')
-      : 'Automatic sync is off — set AUTO_SYNC_HOURS on the server to refresh ConnectWise and Teams on a schedule.';
+      : 'Automatic sync is off — set AUTO_SYNC_HOURS on the server to refresh the ticket sources on a schedule.';
   }
   const showErr = (id, err) => {
     const el = document.getElementById(id);
@@ -1088,27 +1079,92 @@ function updateSyncPage(data) {
   };
   showErr('cwLastError', data && data.cwLastError);
   showErr('teamsLastError', data && data.teamsLastError);
+  showErr('hfLastError', data && data.hfLastError);
+  const hfBtn = document.getElementById('hfSyncBtn');
+  if (hfBtn && data) {
+    hfBtn.style.display = meta.hfApiConfigured ? '' : 'none';
+    document.getElementById('hfCardText').textContent = meta.hfApiConfigured
+      ? 'Pulls tickets straight from the HappyFox API. A CSV export can still be uploaded as a fallback.'
+      : 'Upload a CSV export (HappyFox → Reports → Ticket Export). Add HF_ACCOUNT, HF_API_KEY and HF_AUTH_CODE on the server to sync automatically instead.';
+    document.getElementById('hfSourceText').textContent = data.hfSource === 'api'
+      ? 'Synced through the HappyFox API, including created times and reply status.'
+      : meta.hfApiConfigured ? 'HappyFox API is configured — press Sync HappyFox to pull tickets.'
+      : 'Loaded from a CSV export. Configure the HappyFox API on the server to sync automatically.';
+  }
   if (meta.cwSyncing) {
     const s = document.getElementById('cwSyncStatus');
     if (s && !s.textContent) { s.style.color = '#c8a951'; s.textContent = 'A sync is running on the server…'; }
   }
 }
 
+// ── Sign-in ─────────────────────────────────────────────────────────────────
+// The password is checked by the server, which sets an HttpOnly session cookie.
+
+function showLogin(message) {
+  document.getElementById('pw-overlay').style.display = 'flex';
+  const err = document.getElementById('pw-error');
+  err.textContent = message || '';
+  err.style.display = message ? 'block' : 'none';
+  document.getElementById('pw-input').focus();
+}
+
+async function signIn(event) {
+  event.preventDefault();
+  const input = document.getElementById('pw-input'), btn = document.getElementById('pw-btn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: input.value }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok && body.success) {
+      document.getElementById('pw-overlay').style.display = 'none';
+      await loadData();
+    } else {
+      showLogin(body.error || 'Sign-in failed. Please try again.');
+    }
+  } catch (_) {
+    showLogin('Can’t reach the server. Please try again.');
+  }
+  input.value = '';
+  btn.disabled = false;
+  return false;
+}
+
+async function signOut() {
+  await fetch('/api/logout', { method: 'POST' }).catch(() => {});
+  CW_TICKETS = []; HF_TICKETS = []; TEAMS_MESSAGES = []; HISTORY = []; NO_DATA = true;
+  initDashboard();
+  showPage('home');
+  showLogin();
+}
+
+// POST to a sync endpoint; a 401 means the session expired, so ask for the password again
+async function postSync(path, body) {
+  const res  = await fetch(path, { method: 'POST', body });
+  const data = await res.json();
+  if (res.status === 401) showLogin('Your session expired — please sign in again.');
+  return data;
+}
+
 async function loadData() {
   let data = null, reachable = false;
   try {
-    const res = await fetch('/api/data', { signal: AbortSignal.timeout(10000) });
-    if (res.ok) { data = await res.json(); reachable = true; }
-  } catch (_) { /* server not running — fall back to the embedded sample */ }
+    const res = await fetch('/api/data', { signal: AbortSignal.timeout(15000) });
+    if (res.status === 401 || res.status === 503) {
+      const body = await res.json().catch(() => ({}));
+      showLogin(body.code === 'not_configured' ? body.error : '');
+      return;
+    }
+    reachable = true;
+    if (res.ok) data = await res.json();
+  } catch (_) { /* server not reachable */ }
 
   if (data) {
-    const hasCW = data.cw && data.cw.length > 0, hasHF = data.hf && data.hf.length > 0;
-    if (hasCW || hasHF) {
-      // Real data: never mix it with the embedded sample
-      CW_TICKETS = data.cw || [];
-      HF_TICKETS = data.hf || [];
-      USING_SAMPLE = false;
-    }
+    CW_TICKETS = data.cw || [];
+    HF_TICKETS = data.hf || [];
+    NO_DATA = !CW_TICKETS.length && !HF_TICKETS.length;
     TEAMS_MESSAGES = data.teams || [];
     HISTORY        = Array.isArray(data.history) ? data.history : [];
     SERVER_META    = data._server || null;
@@ -1145,8 +1201,13 @@ function categorize(text) {
 const PRIORITY_RANK = { P1: 1, Critical: 1, P2: 2, Urgent: 2, P3: 3, High: 3, P4: 4, Medium: 4, Low: 5, 'No SLA': 5 };
 const rankOf = p => PRIORITY_RANK[p] || 5;
 
-// ConnectWise SLA targets, in business days (P1 = 1 hr and P2 = 4 hr both breach within a day)
-const SLA_DAYS = { P1: 1, P2: 1, P3: 2, P4: 4 };
+// ── Response SLA ────────────────────────────────────────────────────────────
+// Business hours allowed before a ConnectWise ticket gets its first response.
+const SLA_HOURS    = { P1: 4, P2: 4, P3: 8, P4: 16 };
+const BUSINESS_DAY = { start: 8, end: 16 };            // 8:00 AM – 4:00 PM, Monday–Friday
+// A ticket still counts as "awaiting response" while it sits in one of these statuses
+// or has nobody assigned. Once it moves on, the response clock is considered stopped.
+const AWAITING_RESPONSE_STATUS = /^(new|reassign dispatcher)$/i;
 
 // ── Title similarity ────────────────────────────────────────────────────────
 const SIM_THRESHOLD = 0.5;      // Jaccard token overlap needed for a fuzzy match
@@ -1189,12 +1250,16 @@ function makeTicket(src, raw, now) {
     age: created ? calendarDays(created, now) : null,
     waiting: /waiting|on hold/i.test(status),
     unassigned: isCW && /(^|,)\s*unassigned\s*(,|$)/i.test(assignee),
-    overdueBy: 0, link: null, linkScore: 0, mismatch: false, dupGroup: null,
+    unresponded: !isCW && raw.unresponded === true,          // HappyFox API: no staff reply yet
+    slaBreaches: !isCW ? (raw.slaBreaches || 0) : 0,         // HappyFox API: its own SLA breaches
+    awaiting: false, overdueBy: 0, link: null, linkScore: 0, mismatch: false, dupGroup: null,
     tok: tokenize(summary, true), tokTheme: tokenize(summary, false),
   };
-  // SLA clock pauses while we wait on a vendor or the requester
-  if (isCW && t.open && created && SLA_DAYS[priority] && !t.waiting) {
-    t.overdueBy = Math.max(0, businessDays(created, now) - SLA_DAYS[priority]);
+  // Response SLA: still waiting for a first response, and past the window for its priority
+  t.awaiting = isCW && t.open && (AWAITING_RESPONSE_STATUS.test(status) || t.unassigned);
+  if (t.awaiting && created && SLA_HOURS[priority]) {
+    const over = businessHours(created, now, !hasClockTime(t.createdRaw)) - SLA_HOURS[priority];
+    t.overdueBy = over > 0 ? Math.max(1, Math.round(over)) : 0;   // whole business hours past target
   }
   return t;
 }
@@ -1266,7 +1331,9 @@ function buildModel() {
 // Named filters shared by the cards, the "Needs attention" panel and the Tickets page
 const FLAGS = {
   critical:   { label: 'Critical / P2',          test: t => t.rank <= 2 },
-  overdue:    { label: 'Past SLA target',        test: t => t.overdueBy > 0 },
+  overdue:    { label: 'Past response SLA',      test: t => t.overdueBy > 0 },
+  awaiting:   { label: 'Awaiting first response', test: t => t.awaiting },
+  hfsla:      { label: 'HappyFox: unanswered / SLA breached', test: t => [t, t.link].some(x => x && x.src === 'HF' && (x.unresponded || x.slaBreaches > 0)) },
   unassigned: { label: 'Unassigned (CW)',        test: t => t.unassigned },
   aging:      { label: 'Open 30+ days',          test: t => t.age != null && t.age >= 30 },
   waiting:    { label: 'Waiting 14+ days',       test: t => t.waiting && t.age != null && t.age >= 14 },
@@ -1286,10 +1353,11 @@ function renderAttention() {
     const n = countFlag(flag);
     if (n > 0) items.push({ flag, icon, color, n, title, detail: detail(n) });
   };
-  add('overdue', '⏰', '#e53e3e', 'Past SLA target', () => {
+  add('overdue', '⏰', '#e53e3e', 'Past response SLA', () => {
     const worst = M.cw.filter(FLAGS.overdue.test).sort((a, b) => b.overdueBy - a.overdueBy)[0];
-    return `Worst: CW-${worst.id} is ${plural(worst.overdueBy, 'business day')} over its ${worst.priority} target.`;
+    return `No response yet. Worst: CW-${worst.id}, ${fmtBusiness(worst.overdueBy)} past its ${SLA_HOURS[worst.priority]}-hour ${worst.priority} window.`;
   });
+  add('hfsla', '🦊', '#b7791f', 'HappyFox unanswered / breached', () => 'No staff reply yet, or HappyFox reports an SLA breach.');
   add('critical', '🔴', '#c53030', 'Critical / P2 open', () => 'Highest priority in either system.');
   add('mismatch', '⚖️', '#805ad5', 'Priority mismatch', () => 'Marked Critical/Urgent in HappyFox but P3 or lower in ConnectWise.');
   add('unassigned', '👤', '#dd6b20', 'Unassigned in ConnectWise', () => {
@@ -1328,12 +1396,12 @@ function renderBriefing() {
 
   const headline = !n ? 'No open tickets — the queue is clear.'
     : overdue + crit === 0 ? `${plural(n, 'open issue')}, all within target.`
-    : `${plural(n, 'open issue')} — ${[overdue ? `${overdue} past SLA` : '', crit ? `${crit} critical` : ''].filter(Boolean).join(', ')}.`;
+    : `${plural(n, 'open issue')} — ${[overdue ? `${overdue} past response SLA` : '', crit ? `${crit} critical` : ''].filter(Boolean).join(', ')}.`;
   document.getElementById('briefHeadline').textContent = headline;
 
   const parts = [];
   const worst = M.cw.filter(FLAGS.overdue.test).sort((a, b) => a.rank - b.rank || b.overdueBy - a.overdueBy)[0];
-  if (worst) parts.push(`Start with <strong>CW-${esc(worst.id)}</strong> (${esc(worst.priority)}, “${esc(worst.summary.slice(0, 60))}”), ${plural(worst.overdueBy, 'business day')} over target.`);
+  if (worst) parts.push(`Start with <strong>CW-${esc(worst.id)}</strong> (${esc(worst.priority)}, “${esc(worst.summary.slice(0, 60))}”) — no response yet, ${fmtBusiness(worst.overdueBy)} past its ${SLA_HOURS[worst.priority]}-hour window.`);
   if (unassigned) parts.push(`<strong>${plural(unassigned, 'ticket')}</strong> still ${unassigned === 1 ? 'needs' : 'need'} an owner.`);
   const topCat = Object.entries(tally(M.issues.filter(t => t.category !== 'General'), t => t.category)).sort((a, b) => b[1] - a[1])[0];
   if (topCat && topCat[1] >= 3) parts.push(`Busiest area is <strong>${topCat[0]}</strong> with ${topCat[1]} open.`);
@@ -1571,7 +1639,8 @@ function renderCharts() {
     options: barOpts(),
   });
 
-  const prioLabels = { P1: 'P1 (1 hr)', P2: 'P2 (4 hr)', P3: 'P3 (2 days)', P4: 'P4 (4 days)', 'No SLA': 'No SLA' };
+  const prioLabels = { 'No SLA': 'No SLA' };
+  Object.entries(SLA_HOURS).forEach(([p, h]) => { prioLabels[p] = `${p} (${h} hr)`; });
   const cwPrio = tally(M.cw, t => t.priority);
   const cwKeys = Object.keys(cwPrio).sort();
   draw('cwPriority', 'cwPriorityChart', {
@@ -1592,8 +1661,8 @@ function renderCharts() {
     data: {
       labels: people.map(([k]) => k),
       datasets: [
-        { label: 'Within SLA / waiting', data: people.map(([, v]) => v.ok), backgroundColor: '#63aad0', borderRadius: 4 },
-        { label: 'Past SLA target', data: people.map(([, v]) => v.late), backgroundColor: '#fc8181', borderRadius: 4 },
+        { label: 'Responded / within SLA', data: people.map(([, v]) => v.ok), backgroundColor: '#63aad0', borderRadius: 4 },
+        { label: 'Past response SLA', data: people.map(([, v]) => v.late), backgroundColor: '#fc8181', borderRadius: 4 },
       ],
     },
     options: {
@@ -1781,8 +1850,7 @@ async function syncConnectWise() {
   status.style.color = '#c8a951';
   status.textContent = 'Connecting to ConnectWise… this takes about 2 minutes.';
   try {
-    const res  = await fetch('/api/sync-cw', { method: 'POST' });
-    const data = await res.json();
+    const data = await postSync('/api/sync-cw');
     if (data.success) {
       status.style.color = '#68d391';
       status.textContent = `✓ Synced ${data.count} tickets · Reloading…`;
@@ -1794,9 +1862,31 @@ async function syncConnectWise() {
     }
   } catch (_) {
     status.style.color = '#fc8181';
-    status.textContent = '✗ Server offline — run: node server.js';
+    status.textContent = '✗ Could not reach the server.';
     btn.disabled = false; btn.textContent = '↻ Sync ConnectWise';
   }
+}
+
+async function syncHappyFox() {
+  const btn    = document.getElementById('hfSyncBtn');
+  const status = document.getElementById('hfUploadStatus');
+  btn.disabled = true; btn.textContent = '⏳ Syncing…';
+  status.style.color = '#c8a951'; status.textContent = 'Fetching tickets from HappyFox…';
+  try {
+    const data = await postSync('/api/sync-hf');
+    if (data.success) {
+      status.style.color = '#68d391';
+      status.textContent = `✓ Synced ${data.count} HappyFox tickets`;
+      await loadData();
+    } else {
+      status.style.color = '#fc8181';
+      status.textContent = `✗ ${data.error}`;
+    }
+  } catch (_) {
+    status.style.color = '#fc8181';
+    status.textContent = '✗ Could not reach the server.';
+  }
+  btn.disabled = false; btn.textContent = '↻ Sync HappyFox';
 }
 
 async function uploadHFCSV(input) {
@@ -1807,8 +1897,7 @@ async function uploadHFCSV(input) {
   const formData = new FormData();
   formData.append('csv', input.files[0]);
   try {
-    const res  = await fetch('/api/upload-hf', { method: 'POST', body: formData });
-    const data = await res.json();
+    const data = await postSync('/api/upload-hf', formData);
     if (data.success) {
       status.style.color = '#68d391';
       status.textContent = `✓ Imported ${data.count} HappyFox tickets · Reloading…`;
@@ -1819,7 +1908,7 @@ async function uploadHFCSV(input) {
     }
   } catch (_) {
     status.style.color = '#fc8181';
-    status.textContent = '✗ Server offline — run: node server.js';
+    status.textContent = '✗ Could not reach the server.';
   }
   input.value = '';
 }
@@ -1830,8 +1919,7 @@ async function syncTeams() {
   btn.disabled = true; btn.textContent = '⏳ Syncing…';
   status.style.color = '#a78bfa'; status.textContent = 'Connecting to Microsoft Graph…';
   try {
-    const res  = await fetch('/api/sync-teams', { method: 'POST' });
-    const data = await res.json();
+    const data = await postSync('/api/sync-teams');
     if (data.success) {
       status.style.color = '#68d391';
       status.textContent = `✓ ${data.count} messages pulled · Systemic analysis updated`;
@@ -1898,7 +1986,11 @@ const RESOLUTION_HINTS = {
 // Ticket-specific next steps, most urgent first, shown above the category hint
 function ticketFlags(t) {
   const out = [];
-  if (t.overdueBy > 0)  out.push(['#fed7d7', '#c53030', `Past ${t.priority} SLA by ${plural(t.overdueBy, 'business day')} — escalate`]);
+  if (t.overdueBy > 0)  out.push(['#fed7d7', '#c53030', `No response — ${fmtBusiness(t.overdueBy)} past the ${SLA_HOURS[t.priority]}h ${t.priority} window`]);
+  else if (t.awaiting && SLA_HOURS[t.priority]) out.push(['#bee3f8', '#2c5282', `Awaiting first response (${SLA_HOURS[t.priority]}h window)`]);
+  const hf = t.src === 'HF' ? t : t.link;
+  if (hf && hf.slaBreaches > 0) out.push(['#fed7d7', '#c53030', 'HappyFox SLA breached']);
+  if (hf && hf.unresponded)     out.push(['#fefcbf', '#744210', 'No staff reply in HappyFox yet']);
   if (t.mismatch)       out.push(['#e9d8fd', '#553c9a', `HappyFox says ${t.link.priority} — raise the CW priority`]);
   if (t.unassigned)     out.push(['#feebc8', '#c05621', 'Needs an owner']);
   if (FLAGS.waiting.test(t)) out.push(['#fefcbf', '#744210', `Waiting ${t.age} days — follow up`]);
@@ -2031,7 +2123,7 @@ function exportTicketsCSV() {
     if (/^[=+\-@]/.test(s)) s = "'" + s;          // stop spreadsheets treating a title as a formula
     return '"' + s.replace(/"/g, '""') + '"';
   };
-  const header = ['Ticket', 'Source', 'Summary', 'Priority', 'Status', 'Assignee', 'Contact', 'Created', 'Age (days)', 'Category', 'Business days past SLA', 'Linked ticket'];
+  const header = ['Ticket', 'Source', 'Summary', 'Priority', 'Status', 'Assignee', 'Contact', 'Created', 'Age (days)', 'Category', 'Business hours past response SLA', 'Linked ticket'];
   const lines = ticketsPageRows().map(t => [
     t.id, t.src, t.summary, t.priority, t.status, t.assignee, t.contact, t.createdRaw, t.age ?? '',
     t.category, t.overdueBy || '', t.link ? t.link.id : '',

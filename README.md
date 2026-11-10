@@ -11,6 +11,8 @@ cp .env.example .env    # then fill in the values
 npm start               # http://localhost:3000
 ```
 
+`DASHBOARD_PASSWORD` must be set — the dashboard stays locked without it.
+
 Ticket data is stored in Supabase (one JSON row in the `dashboard_data` table, `id = 1`).
 
 ## What the dashboard does
@@ -27,9 +29,14 @@ Ticket data is stored in Supabase (one JSON row in the `dashboard_data` table, `
 
 ### How the analysis works
 
-- **SLA** — ConnectWise targets are P1/P2 = 1 business day, P3 = 2, P4 = 4, counted from the
-  date entered. The clock is paused for tickets in a "Waiting…" status. Weekends are skipped;
-  school holidays are not.
+- **Response SLA** — a ConnectWise ticket must get a first response within 4 business hours
+  (P1/P2), 8 (P3) or 16 (P4). A ticket counts as *awaiting response* while its status is
+  "New" or "Reassign Dispatcher", or while nobody is assigned. Business hours are 8 AM–4 PM,
+  Monday–Friday; school holidays are not skipped. ConnectWise gives only an entered *date*,
+  so the clock starts the next working morning. All of this is set by `SLA_HOURS`,
+  `BUSINESS_DAY` and `AWAITING_RESPONSE_STATUS` near the top of the script in `index.html`.
+- **HappyFox reply status** — when synced through the API, tickets with no staff reply or a
+  HappyFox-reported SLA breach are flagged.
 - **Cross-system matching** — two titles match when they are identical after clean-up, or
   share at least two words with 50%+ word overlap. If both tickets have a created date they
   must be within 21 days of each other. Fuzzy matches are listed under *Duplicate Group
@@ -45,10 +52,19 @@ Ticket data is stored in Supabase (one JSON row in the `dashboard_data` table, `
 |--------|-----|
 | ConnectWise | Button on *Sync & Import*, or automatically with `AUTO_SYNC_HOURS`. |
 | Teams | Button, or automatically alongside ConnectWise. |
-| HappyFox | Upload a CSV export (Reports → Ticket Export). |
+| HappyFox | Through the HappyFox API once `HF_ACCOUNT`, `HF_API_KEY` and `HF_AUTH_CODE` are set (button, or automatically). A CSV export (Reports → Ticket Export) still works as a fallback. |
 
-`POST /api/sync-all` starts a ConnectWise + Teams sync in the background and returns at once,
-so an outside scheduler can trigger it. Set `CRON_SECRET` to restrict who can call it.
+`POST /api/sync-all` starts a sync of every configured source in the background and returns
+at once, so an outside scheduler can trigger it. The scheduler sends `CRON_SECRET` in an
+`x-cron-secret` header.
+
+## Security
+
+- The password is checked on the server (`POST /api/login`) and never appears in the page.
+  A correct login sets an HttpOnly, signed session cookie that lasts 30 days.
+- Every `/api` route needs that session, so ticket data cannot be read, and syncs cannot be
+  started, without signing in. Eight wrong passwords from one address locks it out for 15 minutes.
+- No ticket data is built into the page itself.
 
 An open dashboard re-reads the data every 5 minutes, and the header warns when a ticket
 source has not been synced for 3 days.
