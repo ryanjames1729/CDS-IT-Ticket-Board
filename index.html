@@ -1024,7 +1024,7 @@ function fmtDate(d) {
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-function updateSyncStatus(data, serverReachable) {
+function updateSyncStatus(data, serverReachable, loadError) {
   const dot = document.getElementById('syncDot'), label = document.getElementById('syncLabel');
   const header = document.getElementById('last-updated');
   const sample = document.getElementById('sampleBanner');
@@ -1038,6 +1038,12 @@ function updateSyncStatus(data, serverReachable) {
     document.getElementById('sampleBannerText').textContent = serverReachable
       ? ' Nothing has been synced so far — open Sync & Import to pull tickets from ConnectWise and HappyFox.'
       : ' Ticket data could not be loaded. Check that the server is running, then reload the page.';
+    if (loadError) {
+      label.textContent = 'Database error';
+      header.textContent = 'Stored tickets could not be loaded';
+      document.getElementById('sampleBannerTitle').textContent = 'Can’t load the stored tickets.';
+      document.getElementById('sampleBannerText').textContent = ` ${loadError} If this mentions Supabase, check that the Supabase project is running and that SUPABASE_URL and SUPABASE_SERVICE_KEY are correct on the server.`;
+    }
     return;
   }
 
@@ -1149,7 +1155,7 @@ async function postSync(path, body) {
 }
 
 async function loadData() {
-  let data = null, reachable = false;
+  let data = null, reachable = false, loadError = '';
   try {
     const res = await fetch('/api/data', { signal: AbortSignal.timeout(15000) });
     if (res.status === 401 || res.status === 503) {
@@ -1159,6 +1165,7 @@ async function loadData() {
     }
     reachable = true;
     if (res.ok) data = await res.json();
+    else loadError = (await res.json().catch(() => ({}))).error || `The server returned an error (HTTP ${res.status}).`;
   } catch (_) { /* server not reachable */ }
 
   if (data) {
@@ -1169,7 +1176,11 @@ async function loadData() {
     HISTORY        = Array.isArray(data.history) ? data.history : [];
     SERVER_META    = data._server || null;
   }
-  updateSyncStatus(data || {}, reachable);
+  if (loadError) {
+    // The server answered but could not read the stored tickets (e.g. the database is unreachable)
+    CW_TICKETS = []; HF_TICKETS = []; NO_DATA = true;
+  }
+  updateSyncStatus(data || {}, reachable, loadError);
   updateSyncPage(data);
   initDashboard();
 }
