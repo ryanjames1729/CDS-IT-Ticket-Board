@@ -8,6 +8,7 @@
     "scrape": "node scraper.js",
     "postinstall": "PLAYWRIGHT_BROWSERS_PATH=./browsers npx playwright install chromium"
   },
+  "engines": { "node": ">=18" },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",
     "csv-parse": "^5.5.3",
