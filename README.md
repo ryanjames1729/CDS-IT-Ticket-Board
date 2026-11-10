@@ -25,6 +25,7 @@ Ticket data is stored in Supabase (one JSON row in the `dashboard_data` table, `
 | **Deduplication** | HappyFox and ConnectWise copies of the same issue are matched by title on every load, and counted once. Repeat entries inside one system are grouped. |
 | **Systemic intelligence** | Tickets sorted into categories, long-running issues, and frequent requestors. |
 | **Charts** | Five charts, each answering one question: are we keeping up (open backlog over time), opened vs closed, where tickets are sitting (by status), who is carrying the load (per person, by age), and how old the backlog is. Clicking a bar opens those tickets. |
+| **Is a change working?** | Follow one category over time (new tickets per week, or open tickets per sync day). Mark the day something changed — e.g. "New print queue" — and the chart shows the before/after average and the percentage change. |
 | **Tickets page** | Every open issue, most urgent first. Filter by source, flag, category and assignee; search; sort by any column; export the current view to CSV. |
 
 ### How the analysis works
@@ -42,7 +43,7 @@ Ticket data is stored in Supabase (one JSON row in the `dashboard_data` table, `
   must be within 21 days of each other. Fuzzy matches are listed under *Duplicate Group
   Analysis* so they can be checked.
 - **Categories** — each ticket goes into the first category whose keywords match its title.
-  Edit `ISSUE_CATEGORIES` in `index.html` to tune them.
+  Edit `ISSUE_CATEGORIES` in `categories.js` to tune them.
 - **Trend** — the server saves one snapshot per day that data is synced (open counts,
   critical, unassigned, opened and closed since the previous sync).
 
@@ -72,5 +73,6 @@ source has not been synced for 3 days.
 ## Files
 
 - `index.html` — the whole front end (markup, styles, analysis and charts)
+- `categories.js` — the category keyword lists, shared by the page and the server
 - `server.js` — Express server: API, sync scheduling, history snapshots
 - `scraper.js` — Playwright scraper for the ConnectWise customer portal

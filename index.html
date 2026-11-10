@@ -6,6 +6,7 @@
 <title>Carolina Day School — IT Ticket Dashboard</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%231e3a5f'/><polyline points='2,16 7,16 10,9 13,23 16,12 19,20 22,9 25,23 28,16 32,16' stroke='%23c8a951' stroke-width='2.2' fill='none' stroke-linejoin='round' stroke-linecap='round'/></svg>">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="/categories.js"></script>
 <style>
   /* ── Password overlay ─────────────────────────────────────────────────── */
   #pw-overlay {
@@ -215,6 +216,27 @@
     display: none; position: absolute; inset: 0; align-items: center; justify-content: center;
     text-align: center; color: #a0aec0; font-size: 0.82rem; line-height: 1.5; padding: 0 24px;
   }
+  .cat-controls { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .cat-chips { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; min-width: 260px; }
+  .cat-chip {
+    font: inherit; font-size: 0.76rem; font-weight: 600; padding: 4px 11px; border-radius: 20px; cursor: pointer;
+    border: 1px solid #e2e8f0; background: white; color: #4a5568; transition: all 0.15s;
+  }
+  .cat-chip:hover { border-color: #2d6a9f; color: #2d6a9f; }
+  .cat-chip.active { background: #2d6a9f; border-color: #2d6a9f; color: white; }
+  .cat-chip .n { opacity: 0.65; font-weight: 500; margin-left: 4px; }
+  .cat-options { display: flex; gap: 8px; align-items: center; }
+  .seg { display: inline-flex; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+  .seg button { font: inherit; font-size: 0.76rem; font-weight: 600; padding: 6px 12px; border: none; background: white; color: #718096; cursor: pointer; }
+  .seg button.active { background: #2d6a9f; color: white; }
+  .cat-markers { margin-top: 12px; padding-top: 12px; border-top: 1px solid #f0f4f8; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+  #catMarkerForm { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .marker-row { display: flex; align-items: baseline; gap: 10px; font-size: 0.8rem; color: #2d3748; margin-bottom: 6px; flex-wrap: wrap; }
+  .marker-row .when { color: #553c9a; font-weight: 700; white-space: nowrap; }
+  .marker-row .impact { font-weight: 700; }
+  .marker-row .impact.good { color: #276749; } .marker-row .impact.bad { color: #c53030; } .marker-row .impact.none { color: #a0aec0; font-weight: 500; }
+  .marker-row button { border: none; background: none; color: #a0aec0; cursor: pointer; font-size: 0.85rem; padding: 0 4px; }
+  .marker-row button:hover { color: #e53e3e; }
   .charts-heading { display: flex; align-items: baseline; gap: 10px; margin: 6px 2px 10px; }
   .charts-heading strong { font-size: 0.95rem; color: #2d3748; }
   .charts-heading span { font-size: 0.78rem; color: #a0aec0; }
@@ -738,6 +760,41 @@
     </div>
   </div>
 
+  <!-- ── Category trend: is a change working? ──────────────────────────── -->
+  <div class="chart-card" style="margin-bottom:16px;">
+    <h3>Is a change working? <span class="badge" id="catNote">—</span></h3>
+    <p class="chart-q">Pick a category to follow it over time. Mark the day you changed something to compare before and after.</p>
+    <div class="cat-controls">
+      <div class="cat-chips" id="catChips"></div>
+      <div class="cat-options">
+        <span class="seg" id="catMetric">
+          <button data-metric="new" onclick="setCatTrend('metric','new')" title="Tickets created each week, open or since closed">New per week</button>
+          <button data-metric="open" onclick="setCatTrend('metric','open')" title="Tickets open on each day the data was synced">Open tickets</button>
+        </span>
+        <select class="filter-select" id="catWeeks" onchange="setCatTrend('weeks',+this.value)" aria-label="Time range">
+          <option value="8">Last 8 weeks</option><option value="13">Last 3 months</option>
+          <option value="26" selected>Last 6 months</option><option value="52">Last 12 months</option>
+        </select>
+      </div>
+    </div>
+    <div class="chart-wrap" style="height:260px">
+      <canvas id="catChart"></canvas>
+      <div class="chart-empty" id="catEmpty"></div>
+    </div>
+    <div class="cat-markers">
+      <div id="catMarkerList"></div>
+      <button class="filter-btn" id="catAddBtn" onclick="toggleMarkerForm(true)">＋ Mark a change</button>
+      <form id="catMarkerForm" style="display:none" onsubmit="return saveMarker(event)">
+        <input type="date" id="markerDate" class="search-box" style="width:150px" required aria-label="Date of the change">
+        <input type="text" id="markerLabel" class="search-box" style="width:240px" maxlength="60" placeholder="What changed? e.g. New print queue" required>
+        <select class="filter-select" id="markerCat" aria-label="Category the change should affect"></select>
+        <button class="filter-btn active" type="submit">Save</button>
+        <button class="filter-btn" type="button" onclick="toggleMarkerForm(false)">Cancel</button>
+        <span id="markerError" style="color:#e53e3e;font-size:0.76rem;"></span>
+      </form>
+    </div>
+  </div>
+
   <!-- ── Ticket Table ───────────────────────────────────────────────────── -->
   <div class="table-card">
     <div class="table-header">
@@ -962,6 +1019,7 @@ let HF_TICKETS = [];
 
 let TEAMS_MESSAGES = [];   // Teams chat messages (systemic analysis only)
 let HISTORY        = [];   // daily snapshots recorded by the server on each sync
+let EVENTS         = [];   // "we changed something" markers shown on the category trend
 let SERVER_META    = null; // sync/scheduler state reported by the server
 let NO_DATA        = true; // true until ticket data arrives from the server
 let M              = null; // analysed ticket model — rebuilt by buildModel()
@@ -1195,6 +1253,7 @@ async function loadData() {
     NO_DATA = !CW_TICKETS.length && !HF_TICKETS.length;
     TEAMS_MESSAGES = data.teams || [];
     HISTORY        = Array.isArray(data.history) ? data.history : [];
+    EVENTS         = Array.isArray(data.events) ? data.events : [];
     SERVER_META    = data._server || null;
   }
   if (loadError) {
@@ -1210,25 +1269,7 @@ async function loadData() {
 // SECTION 3 — TICKET MODEL: CATEGORIES, AGING, SLA, DEDUPLICATION
 // ═══════════════════════════════════════════════════════════════════════════
 
-// First matching category wins, so order matters (most specific first).
-const ISSUE_CATEGORIES = {
-  'Audio / AV':          ['speakers?\\b', 'audio', 'mics?\\b', 'microphone', 'sound', 'projector', 'smart ?board', 'av\\b', 'auditorium', 'pa system'],
-  'Printing':            ['print', 'toner', 'copier'],
-  'Network / WiFi':      ['wi-?fi', 'network', 'internet', 'wireless', 'vpn', 'switch', 'ethernet'],
-  'iPad / Mobile':       ['ipads?\\b', 'mobile', 'phones?\\b', 'verizon', 'tablet', 'mdm'],
-  'Login / Access':      ['log ?in', 'password', 'access', 'locked', 'credential', 'badge', 'off campus', '2fa', 'mfa'],
-  'Software / App':      ['apps?\\b', 'software', 'licen[sc]e', 'google workspace', 'zoom', 'google meet', 'drive sync', 'install', 'cursive wizard', 'mailchimp'],
-  'Chromebook / Device': ['chromebook', 'screen', 'crack', 'battery', 'charger', 'charging'],
-  'Email':               ['e-?mail', 'mail\\b', 'forwarding', 'migration', 'outlook', 'gmail'],
-  'Hardware Repair':     ['repair', 'replace', 'broken', 'bulb', 'laptop', 'computer'],
-};
-const CATEGORY_PATTERNS = Object.entries(ISSUE_CATEGORIES)
-  .map(([cat, kws]) => [cat, new RegExp('\\b(?:' + kws.join('|') + ')', 'i')]);
-
-function categorize(text) {
-  for (const [cat, re] of CATEGORY_PATTERNS) if (re.test(text || '')) return cat;
-  return 'General';
-}
+// ISSUE_CATEGORIES and categorize() come from /categories.js, which the server uses too.
 
 const PRIORITY_RANK = { P1: 1, Critical: 1, P2: 2, Urgent: 2, P3: 3, High: 3, P4: 4, Medium: 4, Low: 5, 'No SLA': 5 };
 const rankOf = p => PRIORITY_RANK[p] || 5;
@@ -1753,6 +1794,230 @@ function renderCharts() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// SECTION 5b — CATEGORY TREND WITH CHANGE MARKERS
+// ═══════════════════════════════════════════════════════════════════════════
+// "New per week" is rebuilt from every ticket's created date, so it has history from day one.
+// "Open tickets" comes from the per-category counts the server saves on each sync.
+
+const CT = { cat: 'All', metric: 'new', weeks: 26 };
+const WEEK_MS = 7 * DAY_MS;
+const COMPARE_WEEKS = 8;        // weeks averaged on each side of a change marker
+const MARKER_COLOR = '#805ad5';
+
+function weekStart(d) {            // Monday of that week, local time
+  const s = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  s.setDate(s.getDate() - ((s.getDay() + 6) % 7));
+  return s;
+}
+const weekIndex = (d, first) => Math.round((weekStart(d) - first) / WEEK_MS);
+const shortDate = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+const inCategory = (t, cat) => cat === 'All' || t.category === cat;
+// Every unique ticket we know about, open or closed (HappyFox copies of CW tickets excluded)
+const allKnownTickets = () => [...M.cwAll, ...M.hfAll.filter(t => !t.link)];
+
+// Tickets created per week for one category: [{ start, count, partial }], oldest first
+function weeklyNew(cat, weeks) {
+  const first = weekStart(new Date(M.now - (weeks - 1) * WEEK_MS));
+  const out = Array.from({ length: weeks }, (_, i) => ({ start: new Date(first.getTime() + i * WEEK_MS + 12 * 3600000), count: 0, partial: i === weeks - 1 }));
+  out.forEach(w => { w.start = weekStart(w.start); });
+  allKnownTickets().forEach(t => {
+    if (!t.created || !inCategory(t, cat)) return;
+    const i = weekIndex(t.created, first);
+    if (i >= 0 && i < weeks) out[i].count++;
+  });
+  return out;
+}
+
+// Open count per sync day for one category: [{ date, count }]
+function openSeries(cat, weeks) {
+  const since = new Date(M.now - weeks * WEEK_MS);
+  return HISTORY.map(h => ({ date: parseTicketDate(h.date), h }))
+    .filter(x => x.date && x.date >= since && (cat === 'All' || x.h.cats))
+    .map(x => ({ date: x.date, count: cat === 'All' ? (x.h.cwOpen || 0) + (x.h.hfOpen || 0) : (x.h.cats[cat] || 0) }));
+}
+
+// Average before vs after a marker, for the selected category and metric
+function markerImpact(marker, cat, metric) {
+  const when = parseTicketDate(marker.date);
+  const avg = list => list.reduce((n, v) => n + v, 0) / list.length;
+  let before, after, unit;
+  if (metric === 'new') {
+    const weeks = weeklyNew(cat, 60), i = weekIndex(when, weeks[0].start);
+    if (i < 0 || i >= weeks.length) return null;
+    before = weeks.slice(Math.max(0, i - COMPARE_WEEKS), i).map(w => w.count);
+    after  = weeks.slice(i + 1, i + 1 + COMPARE_WEEKS).filter(w => !w.partial).map(w => w.count);   // whole weeks only
+    unit = 'new per week';
+  } else {
+    const days = openSeries(cat, 60), span = COMPARE_WEEKS * WEEK_MS;
+    before = days.filter(d => d.date < when && when - d.date <= span).map(d => d.count);
+    after  = days.filter(d => d.date > when && d.date - when <= span).map(d => d.count);
+    unit = 'open on average';
+  }
+  if (!before.length || !after.length) return { pending: !after.length };
+  const b = avg(before), a = avg(after);
+  return { before: b, after: a, unit, pct: b > 0 ? Math.round(100 * (a - b) / b) : null, n: after.length };
+}
+
+// A marker is judged on the category being viewed, or on its own category when viewing all tickets
+const markerScope = marker => (CT.cat !== 'All' ? CT.cat : marker.category);
+
+function impactHtml(marker) {
+  const cat = markerScope(marker);
+  const r = markerImpact(marker, cat, CT.metric);
+  const scope = cat === 'All' ? 'All tickets' : cat;
+  if (!r) return '<span class="impact none">outside the data we have</span>';
+  if (r.before == null) {
+    return `<span class="impact none">${r.pending ? `too early to tell — needs ${CT.metric === 'new' ? 'a full week' : 'a sync'} after the change` : 'no data from before the change'}</span>`;
+  }
+  const tone = r.after < r.before ? 'good' : r.after > r.before ? 'bad' : 'none';
+  const arrow = r.after < r.before ? '▼' : r.after > r.before ? '▲' : '';
+  const span = CT.metric === 'new' ? plural(r.n, 'week') : plural(r.n, 'sync day');
+  return `<span class="impact ${tone}">${scope}: ${r.before.toFixed(1)} → ${r.after.toFixed(1)} ${r.unit}` +
+    `${r.pct != null && arrow ? ` (${arrow} ${Math.abs(r.pct)}%)` : ''}</span> <span style="color:#a0aec0">over ${span} since</span>`;
+}
+
+// Draws each change marker as a dashed vertical line with its label
+const markerLinePlugin = {
+  id: 'markerLines',
+  afterDatasetsDraw(chart) {
+    const list = (chart.options.plugins.markerLines || {}).list || [];
+    const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart;
+    list.forEach((m, i) => {
+      const px = x.getPixelForValue(m.pos);
+      if (!(px >= left && px <= right)) return;
+      ctx.save();
+      ctx.strokeStyle = MARKER_COLOR; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px, bottom); ctx.stroke();
+      ctx.setLineDash([]); ctx.fillStyle = '#553c9a'; ctx.font = "600 10px -apple-system, 'Segoe UI', sans-serif";
+      const rightSide = px < (left + right) / 2;
+      ctx.textAlign = rightSide ? 'left' : 'right';
+      ctx.fillText(m.label, px + (rightSide ? 5 : -5), top - 6 - (i % 2) * 11);
+      ctx.restore();
+    });
+  },
+};
+
+function renderCategoryTrend() {
+  // Category chips, busiest first by open tickets
+  const openBy = tally(M.issues, t => t.category);
+  const cats = ['All', ...Object.keys(ISSUE_CATEGORIES), 'General'].filter(c => c === 'All' || openBy[c] || allKnownTickets().some(t => t.category === c));
+  if (!cats.includes(CT.cat)) CT.cat = 'All';
+  document.getElementById('catChips').innerHTML = cats.map(c =>
+    `<button class="cat-chip${c === CT.cat ? ' active' : ''}" onclick="setCatTrend('cat','${c}')">${c === 'All' ? 'All tickets' : c}<span class="n">${c === 'All' ? M.issues.length : (openBy[c] || 0)}</span></button>`).join('');
+  document.querySelectorAll('#catMetric button').forEach(b => b.classList.toggle('active', b.dataset.metric === CT.metric));
+  document.getElementById('catWeeks').value = CT.weeks;
+
+  // Markers that apply to the selected category
+  const markers = EVENTS.filter(e => CT.cat === 'All' || e.category === 'All' || e.category === CT.cat)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  document.getElementById('catMarkerList').innerHTML = markers.map(m => `
+    <div class="marker-row">
+      <span class="when">┆ ${shortDate(parseTicketDate(m.date))}</span>
+      <span>${esc(m.label)}${m.category !== 'All' ? ` <span style="color:#a0aec0">(${esc(m.category)})</span>` : ''}</span>
+      ${impactHtml(m)}
+      <button onclick="deleteMarker('${esc(m.id)}')" title="Remove this marker" aria-label="Remove marker">✕</button>
+    </div>`).join('');
+
+  // Headline verdict: the latest marker's effect, else the recent level
+  const latest = markers[markers.length - 1];
+  const r = latest && markerImpact(latest, markerScope(latest), CT.metric);
+  if (r && r.before != null && r.pct != null) setNote('catNote', `${r.pct <= 0 ? '▼' : '▲'} ${Math.abs(r.pct)}% since “${latest.label}”`, r.pct < 0 ? 'good' : r.pct > 0 ? 'bad' : '');
+  else setNote('catNote', CT.cat === 'All' ? 'All tickets' : CT.cat);
+
+  if (typeof Chart === 'undefined') return;
+  const empty = document.getElementById('catEmpty'), canvas = document.getElementById('catChart');
+  const showEmpty = text => { empty.textContent = text; empty.style.display = text ? 'flex' : 'none'; canvas.style.display = text ? 'none' : ''; };
+  if (charts.cat) { charts.cat.destroy(); delete charts.cat; }
+
+  let config, positions;
+  if (CT.metric === 'new') {
+    const weeks = weeklyNew(CT.cat, CT.weeks);
+    if (!weeks.some(w => w.count)) return showEmpty('No tickets with a created date in this period for this category.');
+    positions = markers.map(m => { const d = parseTicketDate(m.date); return { label: m.label, pos: weekIndex(d, weeks[0].start) - 0.5 + ((d - weekStart(d)) / WEEK_MS) }; });
+    config = {
+      type: 'bar',
+      data: {
+        labels: weeks.map(w => shortDate(w.start)),
+        datasets: [{ label: 'New tickets', data: weeks.map(w => w.count), backgroundColor: weeks.map(w => w.partial ? '#9cc3e4' : SRC_COLORS.CW), borderRadius: 3, maxBarThickness: 34 }],
+      },
+      options: { plugins: { tooltip: { callbacks: {
+        title: items => `Week of ${items[0].label}${weeks[items[0].dataIndex].partial ? ' (so far)' : ''}`,
+        label: item => ` ${plural(item.raw, 'new ticket')}`,
+      } } } },
+    };
+  } else {
+    const days = openSeries(CT.cat, CT.weeks);
+    if (days.length < 2) {
+      return showEmpty(CT.cat === 'All'
+        ? 'Open-ticket history builds up automatically — one point for each day the tickets are synced.'
+        : 'Open tickets per category are recorded from now on, one point per sync day. Use “New per week” to see history today.');
+    }
+    positions = markers.map(m => { const d = parseTicketDate(m.date); const i = days.findIndex(x => x.date >= d); return { label: m.label, pos: i < 0 ? days.length : i - 0.5 }; });
+    config = {
+      type: 'line',
+      data: {
+        labels: days.map(d => shortDate(d.date)),
+        datasets: [{ label: 'Open tickets', data: days.map(d => d.count), borderColor: SRC_COLORS.CW, backgroundColor: 'rgba(45,106,159,0.12)', fill: true, tension: 0.25, borderWidth: 2, pointRadius: days.length > 30 ? 0 : 3, pointHoverRadius: 5 }],
+      },
+      options: { interaction: { mode: 'index', intersect: false } },
+    };
+  }
+  showEmpty('');
+  config.plugins = [markerLinePlugin];
+  config.options = {
+    responsive: true, maintainAspectRatio: false, layout: { padding: { top: 22 } }, ...config.options,
+    plugins: { legend: { display: false }, markerLines: { list: positions }, ...(config.options.plugins || {}) },
+    scales: { y: { beginAtZero: true, grid: { color: '#f0f4f8' }, ticks: { precision: 0 } }, x: { grid: { display: false }, ticks: { maxTicksLimit: 14 } } },
+  };
+  charts.cat = new Chart(canvas, config);
+}
+
+function setCatTrend(key, value) {
+  CT[key] = value;
+  renderCategoryTrend();
+}
+
+function toggleMarkerForm(show) {
+  document.getElementById('catMarkerForm').style.display = show ? 'flex' : 'none';
+  document.getElementById('catAddBtn').style.display = show ? 'none' : '';
+  document.getElementById('markerError').textContent = '';
+  if (!show) return;
+  const d = new Date();
+  document.getElementById('markerDate').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  document.getElementById('markerCat').innerHTML = ['All', ...Object.keys(ISSUE_CATEGORIES), 'General']
+    .map(c => `<option value="${c}"${c === CT.cat ? ' selected' : ''}>${c === 'All' ? 'Affects all tickets' : 'Affects ' + c}</option>`).join('');
+  document.getElementById('markerLabel').value = '';
+  document.getElementById('markerLabel').focus();
+}
+
+async function saveMarker(event) {
+  event.preventDefault();
+  const err = document.getElementById('markerError');
+  try {
+    const res = await fetch('/api/events', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: document.getElementById('markerDate').value, label: document.getElementById('markerLabel').value, category: document.getElementById('markerCat').value }),
+    });
+    const body = await res.json();
+    if (res.status === 401) return showLogin('Your session expired — please sign in again.'), false;
+    if (!body.success) { err.textContent = body.error || 'Could not save.'; return false; }
+    EVENTS = body.events;
+    toggleMarkerForm(false);
+    renderCategoryTrend();
+  } catch (_) { err.textContent = 'Could not reach the server.'; }
+  return false;
+}
+
+async function deleteMarker(id) {
+  if (!confirm('Remove this change marker?')) return;
+  try {
+    const res = await fetch('/api/events/' + encodeURIComponent(id), { method: 'DELETE' });
+    const body = await res.json();
+    if (body.success) { EVENTS = body.events; renderCategoryTrend(); }
+  } catch (_) { /* leave the marker in place */ }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // SECTION 6 — TICKET EXPLORER (HOME PAGE TABLES)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -2194,6 +2459,7 @@ function initDashboard() {
   document.getElementById('tabLinkedCount').textContent = M.links.length;
 
   renderCharts();
+  renderCategoryTrend();
   renderExplorer();
   populateTicketFilters();
   renderTicketsPage();
