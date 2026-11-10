@@ -910,6 +910,7 @@
         </div>
         <p style="font-size:0.78rem;color:#718096;line-height:1.5;margin:0 0 8px;" id="hfSourceText">Synced through the HappyFox API when it is configured, or from a CSV export.</p>
         <div style="font-size:0.72rem;color:#a0aec0;">Last synced: <span id="hfLastSync">—</span></div>
+        <div id="hfBreakdown" style="font-size:0.74rem;color:#4a5568;line-height:1.6;margin-top:10px;"></div>
       </div>
 
       <div style="background:#f7fafc;border-radius:10px;padding:16px 18px;border-left:3px solid #6264a7;">
@@ -1086,6 +1087,16 @@ function updateSyncPage(data) {
   showErr('cwLastError', data && data.cwLastError);
   showErr('teamsLastError', data && data.teamsLastError);
   showErr('hfLastError', data && data.hfLastError);
+
+  // What the HappyFox open count is made of — makes a mismatch with HappyFox easy to trace
+  const hfOpen = HF_TICKETS.filter(isHFOpen);
+  const parts = (label, keyFn) => {
+    const counts = Object.entries(tally(hfOpen, keyFn)).sort((a, b) => b[1] - a[1]);
+    return `<div><strong>By ${label}:</strong> ${counts.map(([k, n]) => `${esc(k)} ${n}`).join(' · ')}</div>`;
+  };
+  document.getElementById('hfBreakdown').innerHTML = !hfOpen.length ? '' :
+    `<div><strong>${hfOpen.length} open</strong> in the dashboard</div>` +
+    parts('category', t => t.category || 'No category') + parts('status', t => t.status || 'No status');
   const hfBtn = document.getElementById('hfSyncBtn');
   if (hfBtn && data) {
     hfBtn.style.display = meta.hfApiConfigured ? '' : 'none';
