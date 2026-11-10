@@ -193,7 +193,7 @@
   .row-3  { grid-template-columns: 1fr 1fr 1fr; }
   .row-2  { grid-template-columns: 1.6fr 1fr; }
   .row-2b { grid-template-columns: 1fr 1.6fr; }
-  .row-2c { grid-template-columns: 1fr 1.4fr; }
+  .row-2c { grid-template-columns: 1.4fr 1fr; }
   .chart-card {
     background: white; border-radius: 12px; padding: 20px 24px;
     box-shadow: 0 1px 4px rgba(0,0,0,0.08);
@@ -206,6 +206,18 @@
     background: #edf2f7; color: #718096; padding: 2px 8px; border-radius: 20px; font-size: 0.7rem;
   }
   .chart-wrap { position: relative; }
+  .chart-card h3 { margin-bottom: 4px; text-transform: none; letter-spacing: 0; font-size: 0.95rem; color: #2d3748; justify-content: space-between; }
+  .chart-card h3 .badge { font-weight: 700; white-space: nowrap; }
+  .chart-card h3 .badge.bad  { background: #fed7d7; color: #c53030; }
+  .chart-card h3 .badge.good { background: #c6f6d5; color: #276749; }
+  .chart-q { font-size: 0.76rem; color: #a0aec0; margin-bottom: 12px; }
+  .chart-empty {
+    display: none; position: absolute; inset: 0; align-items: center; justify-content: center;
+    text-align: center; color: #a0aec0; font-size: 0.82rem; line-height: 1.5; padding: 0 24px;
+  }
+  .charts-heading { display: flex; align-items: baseline; gap: 10px; margin: 6px 2px 10px; }
+  .charts-heading strong { font-size: 0.95rem; color: #2d3748; }
+  .charts-heading span { font-size: 0.78rem; color: #a0aec0; }
 
   /* ── Tabs ─────────────────────────────────────────────────────────────── */
   .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
@@ -683,48 +695,46 @@
     </div>
   </div>
 
-  <!-- ── Row 1: CW Status, CW Type, HF Priority ─────────────────────────── -->
-  <div class="charts-row row-3">
-    <div class="chart-card">
-      <h3>CW — Ticket Status <span class="badge" id="badgeCWTotal">—</span></h3>
-      <div class="chart-wrap" style="height:220px"><canvas id="cwStatusChart"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <h3>CW — Incident vs Request <span class="badge" id="badgeCWType">—</span></h3>
-      <div class="chart-wrap" style="height:220px"><canvas id="cwTypeChart"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <h3>HF — Priority Breakdown <span class="badge" id="badgeHFTotal">—</span></h3>
-      <div class="chart-wrap" style="height:220px"><canvas id="hfPriorityChart"></canvas></div>
-    </div>
+  <!-- ── Charts: each one answers a question; click a bar to open those tickets ── -->
+  <div class="charts-heading">
+    <strong>At a glance</strong>
+    <span>Each chart answers one question. Click any bar to open those tickets.</span>
   </div>
 
-  <!-- ── Row 2: CW Priority, CW Assignee ───────────────────────────────── -->
-  <div class="charts-row row-2b">
-    <div class="chart-card">
-      <h3>CW — Priority Distribution <span class="badge" id="badgeCWPriority">—</span></h3>
-      <div class="chart-wrap" style="height:240px"><canvas id="cwPriorityChart"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <h3>CW — Workload by Assignee <span class="badge">top 8 · red = past response SLA</span></h3>
-      <div class="chart-wrap" style="height:240px"><canvas id="cwAssigneeChart"></canvas></div>
-    </div>
-  </div>
-
-  <!-- ── Row 3: Backlog age + trend ────────────────────────────────────── -->
   <div class="charts-row row-2c">
     <div class="chart-card">
-      <h3>Open Backlog by Age <span class="badge" id="agingNote">—</span></h3>
-      <div class="chart-wrap" style="height:230px"><canvas id="agingChart"></canvas></div>
+      <h3>Are we keeping up? <span class="badge" id="trendNote">—</span></h3>
+      <p class="chart-q">Open tickets on each day the data was synced.</p>
+      <div class="chart-wrap" style="height:210px">
+        <canvas id="trendChart"></canvas>
+        <div class="chart-empty" id="trendEmpty">The trend builds up automatically — one point for each day the tickets are synced. It appears after the second sync day.</div>
+      </div>
     </div>
     <div class="chart-card">
-      <h3>Backlog Trend <span class="badge" id="trendNote">—</span></h3>
-      <div class="chart-wrap" style="height:230px">
-        <canvas id="trendChart"></canvas>
-        <div id="trendEmpty" style="display:none;height:100%;align-items:center;justify-content:center;text-align:center;color:#a0aec0;font-size:0.82rem;line-height:1.5;padding:0 24px;">
-          The trend line builds up automatically — one point is recorded for each day the tickets are synced. It appears after the second sync day.
-        </div>
+      <h3>Opened vs closed <span class="badge" id="flowNote">—</span></h3>
+      <p class="chart-q">Tickets that appeared and disappeared between syncs.</p>
+      <div class="chart-wrap" style="height:210px">
+        <canvas id="flowChart"></canvas>
+        <div class="chart-empty" id="flowEmpty">Appears after the second sync day, once there is a previous sync to compare against.</div>
       </div>
+    </div>
+  </div>
+
+  <div class="charts-row row-3">
+    <div class="chart-card">
+      <h3>Where are tickets sitting? <span class="badge" id="statusNote">—</span></h3>
+      <p class="chart-q">Open issues by current status.</p>
+      <div class="chart-wrap" style="height:250px"><canvas id="statusChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Who is carrying the load? <span class="badge" id="workloadNote">—</span></h3>
+      <p class="chart-q">Open issues per person, darker = older.</p>
+      <div class="chart-wrap" style="height:250px"><canvas id="workloadChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>How old is the backlog? <span class="badge" id="agingNote">—</span></h3>
+      <p class="chart-q">Open issues by days since they were created.</p>
+      <div class="chart-wrap" style="height:250px"><canvas id="agingChart"></canvas></div>
     </div>
   </div>
 
@@ -1603,16 +1613,11 @@ function renderSystemicIntel() {
 // SECTION 5 — CHART RENDERING
 // ═══════════════════════════════════════════════════════════════════════════
 
-const CHART_COLORS = {
-  status: {
-    'In Progress': '#3d8bc7', 'Assigned': '#38a169', 'Reassign Dispatcher': '#dd6b20',
-    'Waiting Vendor Response': '#805ad5', 'Waiting Client Response': '#d69e2e',
-    'Child Ticket': '#718096', 'New': '#48bb78',
-  },
-  priority: { 'P1': '#e53e3e', 'P2': '#dd6b20', 'P3': '#d69e2e', 'P4': '#38a169', 'No SLA': '#a0aec0' },
-  hfPriority: { 'Critical': '#e53e3e', 'Urgent': '#e53e3e', 'High': '#dd6b20', 'Medium': '#d69e2e', 'Low': '#a0aec0' },
-};
+// Source colours are fixed everywhere: ConnectWise blue, HappyFox gold.
+const SRC_COLORS = { CW: '#2d6a9f', HF: '#c8a951' };
+const AGE_RAMP   = ['#9cc3e4', '#4a8fc7', '#1e3a5f'];          // one hue, light → dark = fresh → stale
 const AGE_BUCKETS = [['0–7 days', 0, 7], ['8–14', 8, 14], ['15–30', 15, 30], ['31–60', 31, 60], ['61–90', 61, 90], ['90+ days', 91, Infinity]];
+const WORKLOAD_AGES = [['Under 14 days', 0, 13], ['14–30 days', 14, 30], ['Over 30 days', 31, Infinity]];
 
 let charts = {};
 
@@ -1622,125 +1627,129 @@ function tally(list, keyFn) {
   return out;
 }
 
+const assigneesOf = t => { const names = t.assignee.split(',').map(a => a.trim()).filter(Boolean); return names.length ? names : ['Unassigned']; };
+
+function setNote(id, text, tone) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'badge' + (tone ? ' ' + tone : '');
+}
+
+// Five charts, each answering one question. Bars are clickable and open the matching tickets.
 function renderCharts() {
   if (typeof Chart === 'undefined') return;   // CDN blocked — the rest of the dashboard still works
   Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
   Chart.defaults.font.size = 11;
+  Chart.defaults.color = '#718096';
   Chart.defaults.plugins.legend.labels.boxWidth = 12;
 
   const draw = (key, canvasId, config) => {
     if (charts[key]) charts[key].destroy();
     charts[key] = new Chart(document.getElementById(canvasId), config);
   };
-  const donutOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { padding: 10, font: { size: 10 } } } } };
-  const barOpts = (extra = {}) => ({
-    responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
-    scales: { y: { beginAtZero: true, grid: { color: '#f0f4f8' }, ticks: { precision: 0 } }, x: { grid: { display: false } } }, ...extra,
+  const legend = { position: 'bottom', labels: { padding: 10, font: { size: 10 } } };
+  const grid = { color: '#f0f4f8' }, noGrid = { display: false };
+  const count = { beginAtZero: true, grid, ticks: { precision: 0 } };
+  // Click a bar → run `open(index, datasetIndex)`; show a pointer while hovering one
+  const clickable = open => ({
+    onClick: (evt, els) => { if (els.length) open(els[0].index, els[0].datasetIndex); },
+    onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
   });
+  const bar = (label, data, color) => ({ label, data, backgroundColor: color, borderColor: '#ffffff', borderWidth: 1, borderRadius: 3 });
+  const bySource = (list, countFn) => [
+    bar('ConnectWise', countFn(list.filter(t => t.src === 'CW')), SRC_COLORS.CW),
+    bar('HappyFox only', countFn(list.filter(t => t.src === 'HF')), SRC_COLORS.HF),
+  ];
+  const dayLabel = h => { const d = parseTicketDate(h.date); return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : h.date; };
 
-  const statusData = tally(M.cw, t => t.status || 'Unknown');
-  draw('cwStatus', 'cwStatusChart', {
-    type: 'doughnut',
-    data: { labels: Object.keys(statusData), datasets: [{ data: Object.values(statusData), backgroundColor: Object.keys(statusData).map(k => CHART_COLORS.status[k] || '#cbd5e0'), borderWidth: 2 }] },
-    options: donutOpts,
-  });
-
-  const typeData = tally(M.cw, t => t.type || 'Unknown');
-  draw('cwType', 'cwTypeChart', {
-    type: 'doughnut',
-    data: { labels: Object.keys(typeData), datasets: [{ data: Object.values(typeData), backgroundColor: ['#e53e3e', '#2d6a9f', '#a0aec0', '#805ad5', '#d69e2e'], borderWidth: 2 }] },
-    options: donutOpts,
-  });
-
-  const hfOrder = ['Critical', 'Urgent', 'High', 'Medium', 'Low'];
-  const hfPrio = tally(M.hf, t => t.priority);
-  const hfKeys = Object.keys(hfPrio).sort((a, b) => (hfOrder.indexOf(a) + 1 || 99) - (hfOrder.indexOf(b) + 1 || 99));
-  draw('hfPriority', 'hfPriorityChart', {
-    type: 'bar',
-    data: { labels: hfKeys, datasets: [{ label: 'Tickets', data: hfKeys.map(k => hfPrio[k]), backgroundColor: hfKeys.map(k => CHART_COLORS.hfPriority[k] || '#a0aec0'), borderRadius: 6 }] },
-    options: barOpts(),
-  });
-
-  const prioLabels = { 'No SLA': 'No SLA' };
-  Object.entries(SLA_HOURS).forEach(([p, h]) => { prioLabels[p] = `${p} (${h} hr)`; });
-  const cwPrio = tally(M.cw, t => t.priority);
-  const cwKeys = Object.keys(cwPrio).sort();
-  draw('cwPriority', 'cwPriorityChart', {
-    type: 'bar',
-    data: { labels: cwKeys.map(k => prioLabels[k] || k), datasets: [{ label: 'Tickets', data: cwKeys.map(k => cwPrio[k]), backgroundColor: cwKeys.map(k => CHART_COLORS.priority[k] || '#a0aec0'), borderRadius: 6 }] },
-    options: barOpts(),
-  });
-
-  // Workload per assignee, split by whether the ticket is past its SLA target (top 8)
-  const load = {};
-  M.cw.forEach(t => t.assignee.split(',').map(r => r.trim() || 'Unassigned').forEach(name => {
-    const r = (load[name] = load[name] || { ok: 0, late: 0 });
-    t.overdueBy > 0 ? r.late++ : r.ok++;
-  }));
-  const people = Object.entries(load).sort((a, b) => (b[1].ok + b[1].late) - (a[1].ok + a[1].late)).slice(0, 8);
-  draw('cwAssignee', 'cwAssigneeChart', {
-    type: 'bar',
-    data: {
-      labels: people.map(([k]) => k),
-      datasets: [
-        { label: 'Responded / within SLA', data: people.map(([, v]) => v.ok), backgroundColor: '#63aad0', borderRadius: 4 },
-        { label: 'Past response SLA', data: people.map(([, v]) => v.late), backgroundColor: '#fc8181', borderRadius: 4 },
-      ],
-    },
-    options: {
-      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom', labels: { padding: 10, font: { size: 10 } } } },
-      scales: { x: { stacked: true, beginAtZero: true, grid: { color: '#f0f4f8' }, ticks: { precision: 0 } }, y: { stacked: true, grid: { display: false } } },
-    },
-  });
-
-  // Aging buckets — how old is the open backlog?
-  const bucket = list => AGE_BUCKETS.map(([, lo, hi]) => list.filter(t => t.age != null && t.age >= lo && t.age <= hi).length);
-  const hfDated = M.hfOnly.filter(t => t.age != null);
-  draw('aging', 'agingChart', {
-    type: 'bar',
-    data: {
-      labels: AGE_BUCKETS.map(b => b[0]),
-      datasets: [
-        { label: 'ConnectWise', data: bucket(M.cw), backgroundColor: '#2d6a9f', borderRadius: 4 },
-        ...(hfDated.length ? [{ label: 'HappyFox only', data: bucket(hfDated), backgroundColor: '#c8a951', borderRadius: 4 }] : []),
-      ],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom', labels: { padding: 10, font: { size: 10 } } } },
-      scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, grid: { color: '#f0f4f8' }, ticks: { precision: 0 } } },
-    },
-  });
-  const undated = M.issues.filter(t => t.age == null).length;
-  document.getElementById('agingNote').textContent = undated ? `${undated} without a created date not shown` : `${M.issues.length} open`;
-
-  // Backlog trend — one point per day the data was synced
-  const hist = HISTORY.slice(-90);
+  // ── 1. Are we keeping up? Open backlog on each sync day ───────────────────
+  const hist = HISTORY.slice(-60);
   const hasTrend = hist.length >= 2;
   document.getElementById('trendEmpty').style.display = hasTrend ? 'none' : 'flex';
   document.getElementById('trendChart').style.display = hasTrend ? '' : 'none';
-  document.getElementById('trendNote').textContent = hasTrend ? `${hist.length} sync days` : 'building';
   if (hasTrend) {
-    const line = (label, key, color) => ({ label, data: hist.map(h => h[key] ?? null), borderColor: color, backgroundColor: color, tension: 0.25, pointRadius: hist.length > 30 ? 0 : 3, borderWidth: 2, spanGaps: true });
+    const total = h => (h.cwOpen || 0) + (h.hfOpen || 0);
+    const change = total(hist[hist.length - 1]) - total(hist[0]);
+    setNote('trendNote', (change > 0 ? `▲ ${change}` : change < 0 ? `▼ ${-change}` : 'Flat') + ` since ${dayLabel(hist[0])}`, change > 0 ? 'bad' : change < 0 ? 'good' : '');
+    const line = (label, key, color) => ({ label, data: hist.map(h => h[key] ?? null), borderColor: color, backgroundColor: color, tension: 0.25, pointRadius: hist.length > 30 ? 0 : 3, pointHoverRadius: 5, borderWidth: 2, spanGaps: true });
     draw('trend', 'trendChart', {
       type: 'line',
-      data: {
-        labels: hist.map(h => { const d = parseTicketDate(h.date); return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : h.date; }),
-        datasets: [line('CW open', 'cwOpen', '#2d6a9f'), line('HF open', 'hfOpen', '#c8a951'), line('Critical / P2', 'critical', '#e53e3e'), line('CW unassigned', 'unassigned', '#dd6b20')],
-      },
+      data: { labels: hist.map(dayLabel), datasets: [line('ConnectWise open', 'cwOpen', SRC_COLORS.CW), line('HappyFox open', 'hfOpen', SRC_COLORS.HF)] },
       options: {
         responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
-        plugins: { legend: { position: 'bottom', labels: { padding: 10, font: { size: 10 } } } },
-        scales: { y: { beginAtZero: true, grid: { color: '#f0f4f8' }, ticks: { precision: 0 } }, x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } } },
+        plugins: { legend }, scales: { y: count, x: { grid: noGrid, ticks: { maxTicksLimit: 10 } } },
       },
     });
-  } else if (charts.trend) { charts.trend.destroy(); delete charts.trend; }
+  } else {
+    setNote('trendNote', 'building');
+    if (charts.trend) { charts.trend.destroy(); delete charts.trend; }
+  }
 
-  document.getElementById('badgeCWTotal').textContent    = M.cw.length + ' open';
-  document.getElementById('badgeCWType').textContent     = M.cw.length + ' open';
-  document.getElementById('badgeHFTotal').textContent    = M.hf.length + ' open';
-  document.getElementById('badgeCWPriority').textContent = M.cw.length + ' open';
+  // ── 2. Opened vs closed between syncs ─────────────────────────────────────
+  const flow = HISTORY.slice(-14);
+  const hasFlow = flow.length >= 2;
+  document.getElementById('flowEmpty').style.display = hasFlow ? 'none' : 'flex';
+  document.getElementById('flowChart').style.display = hasFlow ? '' : 'none';
+  if (hasFlow) {
+    const net = flow.reduce((n, h) => n + (h.opened || 0) - (h.closed || 0), 0);
+    setNote('flowNote', net > 0 ? `${net} more opened than closed` : net < 0 ? `${-net} more closed than opened` : 'Even', net > 0 ? 'bad' : net < 0 ? 'good' : '');
+    draw('flow', 'flowChart', {
+      type: 'bar',
+      data: { labels: flow.map(dayLabel), datasets: [bar('Opened', flow.map(h => h.opened || 0), '#dd6b20'), bar('Closed', flow.map(h => h.closed || 0), SRC_COLORS.CW)] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend }, scales: { y: count, x: { grid: noGrid, ticks: { maxTicksLimit: 10 } } } },
+    });
+  } else {
+    setNote('flowNote', 'building');
+    if (charts.flow) { charts.flow.destroy(); delete charts.flow; }
+  }
+
+  // ── 3. Where are tickets sitting? Open issues by status ───────────────────
+  const statusOf = t => t.status || 'No status';
+  const statuses = Object.entries(tally(M.issues, statusOf)).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k]) => k);
+  if (statuses.length) setNote('statusNote', `Most: ${statuses[0]}`);
+  draw('status', 'statusChart', {
+    type: 'bar',
+    data: { labels: statuses, datasets: bySource(M.issues, list => statuses.map(st => list.filter(t => statusOf(t) === st).length)) },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend },
+      scales: { x: { ...count, stacked: true }, y: { stacked: true, grid: noGrid } },
+      ...clickable(i => openTickets({ status: statuses[i] })),
+    },
+  });
+
+  // ── 4. Who is carrying the load? Open issues per person, by age ───────────
+  const load = {};
+  M.issues.forEach(t => assigneesOf(t).forEach(name => { (load[name] = load[name] || []).push(t); }));
+  const people = Object.entries(load).sort((a, b) => b[1].length - a[1].length).slice(0, 8);
+  const busiest = people.find(([name]) => name !== 'Unassigned');
+  if (busiest) setNote('workloadNote', `Most: ${busiest[0]} (${busiest[1].length})`);
+  draw('workload', 'workloadChart', {
+    type: 'bar',
+    data: {
+      labels: people.map(([name]) => name),
+      // Tickets with no created date count as new
+      datasets: WORKLOAD_AGES.map(([label, lo, hi], i) => bar(label, people.map(([, list]) => list.filter(t => (t.age ?? 0) >= lo && (t.age ?? 0) <= hi).length), AGE_RAMP[i])),
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend },
+      scales: { x: { ...count, stacked: true }, y: { stacked: true, grid: noGrid } },
+      ...clickable(i => openTickets({ assignee: people[i][0] })),
+    },
+  });
+
+  // ── 5. How old is the backlog? ────────────────────────────────────────────
+  const dated = M.issues.filter(t => t.age != null);
+  const old = dated.filter(t => t.age > 30).length;
+  setNote('agingNote', dated.length ? `${Math.round(100 * old / dated.length)}% over 30 days` : '—', dated.length && old / dated.length >= 0.25 ? 'bad' : '');
+  draw('aging', 'agingChart', {
+    type: 'bar',
+    data: { labels: AGE_BUCKETS.map(b => b[0]), datasets: bySource(dated, list => AGE_BUCKETS.map(([, lo, hi]) => list.filter(t => t.age >= lo && t.age <= hi).length)) },
+    options: {
+      responsive: true, maintainAspectRatio: false, plugins: { legend },
+      scales: { x: { stacked: true, grid: noGrid }, y: { ...count, stacked: true } },
+      ...clickable(i => openTickets({ ageMin: AGE_BUCKETS[i][1], ageMax: AGE_BUCKETS[i][2], ageLabel: AGE_BUCKETS[i][0] })),
+    },
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2021,7 +2030,8 @@ function ticketFlags(t) {
   return out.map(([bg, fg, text]) => `<span class="flag-chip" style="background:${bg};color:${fg}">${esc(text)}</span>`).join('');
 }
 
-const TF = { src: 'all', flag: '', category: '', assignee: '', q: '', sort: 'urgency', dir: 1, page: 1 };
+const TF_DEFAULTS = { src: 'all', flag: '', category: '', assignee: '', status: '', ageMin: null, ageMax: null, ageLabel: '', q: '', sort: 'urgency', dir: 1, page: 1 };
+const TF = { ...TF_DEFAULTS };
 const TICKETS_PAGE_SIZE = 20;
 
 const SORTERS = {
@@ -2041,7 +2051,9 @@ function ticketsPageRows() {
   let rows = TF.src === 'CW' ? M.cw : TF.src === 'HF' ? M.hf : M.issues;
   if (TF.flag && FLAGS[TF.flag]) rows = rows.filter(FLAGS[TF.flag].test);
   if (TF.category) rows = rows.filter(t => t.category === TF.category);
-  if (TF.assignee) rows = rows.filter(t => t.assignee.split(',').some(a => a.trim() === TF.assignee));
+  if (TF.assignee) rows = rows.filter(t => assigneesOf(t).includes(TF.assignee));
+  if (TF.status)   rows = rows.filter(t => (t.status || 'No status') === TF.status);
+  if (TF.ageMin != null) rows = rows.filter(t => t.age != null && t.age >= TF.ageMin && t.age <= TF.ageMax);
   const q = TF.q.trim().toLowerCase();
   if (q) rows = rows.filter(t => [t.id, t.summary, t.assignee, t.contact, t.status, t.link && t.link.id]
     .some(f => String(f || '').toLowerCase().includes(q)));
@@ -2077,6 +2089,7 @@ function renderTicketsPage() {
 
   document.getElementById('ticketsPagination').innerHTML = paginationHtml(rows.length, TF.page, TICKETS_PAGE_SIZE, 'goTicketsPage');
   document.getElementById('ticketsCount').textContent = `${plural(rows.length, 'ticket')}` +
+    (TF.status ? ` · status: ${TF.status}` : '') + (TF.ageMin != null ? ` · age: ${TF.ageLabel}` : '') +
     (TF.src === 'all' && M.links.length ? ` · ${M.links.length} HappyFox duplicates of ConnectWise tickets hidden` : '');
 
   // Reflect state in the controls
@@ -2086,7 +2099,7 @@ function renderTicketsPage() {
   document.getElementById('tfAssignee').value = TF.assignee;
   const search = document.getElementById('ticketsSearch');
   if (search.value !== TF.q) search.value = TF.q;
-  document.getElementById('tfClear').style.display = (TF.flag || TF.category || TF.assignee || TF.q || TF.src !== 'all') ? '' : 'none';
+  document.getElementById('tfClear').style.display = (TF.flag || TF.category || TF.assignee || TF.status || TF.ageMin != null || TF.q || TF.src !== 'all') ? '' : 'none';
   document.querySelectorAll('#ticketsTable th[data-sort]').forEach(th => {
     th.querySelector('.sort-arrow').textContent = th.dataset.sort === TF.sort ? (TF.dir === 1 ? '▲' : '▼') : '';
   });
@@ -2101,7 +2114,7 @@ function populateTicketFilters() {
   const cats = tally(M.issues, t => t.category);
   fill('tfCategory', 'All categories', Object.entries(cats).sort((a, b) => b[1] - a[1]).map(([c, n]) => [c, `${c} (${n})`]));
   const people = {};
-  M.issues.forEach(t => t.assignee.split(',').map(a => a.trim()).filter(Boolean).forEach(a => { people[a] = (people[a] || 0) + 1; }));
+  M.issues.forEach(t => assigneesOf(t).forEach(a => { people[a] = (people[a] || 0) + 1; }));
   fill('tfAssignee', 'All assignees', Object.entries(people).sort((a, b) => b[1] - a[1]).map(([a, n]) => [a, `${a} (${n})`]));
   if (TF.assignee && !people[TF.assignee]) TF.assignee = '';
   if (TF.category && !cats[TF.category]) TF.category = '';
@@ -2114,13 +2127,13 @@ function setTicketFilter(key, value) {
 }
 
 function clearTicketFilters() {
-  Object.assign(TF, { src: 'all', flag: '', category: '', assignee: '', q: '', sort: 'urgency', dir: 1, page: 1 });
+  Object.assign(TF, TF_DEFAULTS);
   renderTicketsPage();
 }
 
 // Jump to the Tickets page with a preset filter (used by cards, attention items, clusters)
 function openTickets(preset) {
-  Object.assign(TF, { src: 'all', flag: '', category: '', assignee: '', q: '', sort: 'urgency', dir: 1, page: 1 }, preset || {});
+  Object.assign(TF, TF_DEFAULTS, preset || {});
   renderTicketsPage();
   showPage('tickets');
 }

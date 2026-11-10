@@ -24,7 +24,7 @@ Ticket data is stored in Supabase (one JSON row in the `dashboard_data` table, `
 | **Needs attention** | Past-SLA tickets, priority mismatches between the two systems, unassigned tickets, tickets stalled on a vendor or requester, tickets open 30+ days, and repeat issues. |
 | **Deduplication** | HappyFox and ConnectWise copies of the same issue are matched by title on every load, and counted once. Repeat entries inside one system are grouped. |
 | **Systemic intelligence** | Tickets sorted into categories, long-running issues, and frequent requestors. |
-| **Charts** | Status, type and priority mix, workload per assignee (with past-SLA share), backlog by age, and backlog trend over time. |
+| **Charts** | Five charts, each answering one question: are we keeping up (open backlog over time), opened vs closed, where tickets are sitting (by status), who is carrying the load (per person, by age), and how old the backlog is. Clicking a bar opens those tickets. |
 | **Tickets page** | Every open issue, most urgent first. Filter by source, flag, category and assignee; search; sort by any column; export the current view to CSV. |
 
 ### How the analysis works
