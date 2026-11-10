@@ -336,7 +336,9 @@ app.post('/api/upload-hf', upload.single('csv'), async (req, res) => {
 // plus an API key and auth code from HappyFox → Apps → Goodies → API.
 // Reference: https://support.happyfox.com/kb/article/1039-tickets-endpoint
 
-const hfApiConfigured = () => !!(process.env.HF_ACCOUNT && process.env.HF_API_KEY && process.env.HF_AUTH_CODE);
+// Values pasted into a hosting dashboard often pick up stray spaces or quote marks
+const hfEnv = name => (process.env[name] || '').trim().replace(/^["']|["']$/g, '').trim();
+const hfApiConfigured = () => !!(hfEnv('HF_ACCOUNT') && hfEnv('HF_API_KEY') && hfEnv('HF_AUTH_CODE'));
 const HF_PAGE_SIZE = 50;        // the API's maximum
 const HF_MAX_PAGES = 100;       // safety stop: 5,000 tickets per request
 const HF_KEEP_CLOSED = 3000;    // closed tickets kept for the recurring-issue analysis
@@ -344,13 +346,13 @@ const HF_BACKFILL_DAYS = 90;    // closed history pulled on the first API sync
 let hfSyncRunning = false;
 
 function hfBaseUrl() {
-  const account = process.env.HF_ACCOUNT.trim().replace(/\/+$/, '');
-  if (/^https?:\/\//i.test(account)) return account;
+  // Accepts "school", "school.happyfox.com" or a full URL; anything after the host is dropped
+  const account = hfEnv('HF_ACCOUNT').replace(/^https?:\/\//i, '').split('/')[0];
   return `https://${account.includes('.') ? account : account + '.happyfox.com'}`;
 }
 
 async function hfGet(pathAndQuery, attempt = 1) {
-  const auth = Buffer.from(`${process.env.HF_API_KEY}:${process.env.HF_AUTH_CODE}`).toString('base64');
+  const auth = Buffer.from(`${hfEnv('HF_API_KEY')}:${hfEnv('HF_AUTH_CODE')}`).toString('base64');
   const res = await fetch(hfBaseUrl() + pathAndQuery, {
     headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
     signal: AbortSignal.timeout(30000),
@@ -363,7 +365,11 @@ async function hfGet(pathAndQuery, attempt = 1) {
     await new Promise(r => setTimeout(r, Math.min(wait, 30000)));
     return hfGet(pathAndQuery, attempt + 1);
   }
-  if (res.status === 401 || res.status === 403) throw new Error('HappyFox rejected the API key / auth code (HTTP ' + res.status + ').');
+  if (res.status === 401 || res.status === 403) {
+    throw new Error(`${new URL(hfBaseUrl()).host} rejected the API key / auth code (HTTP ${res.status}). ` +
+      `Sent a ${hfEnv('HF_API_KEY').length}-character key and a ${hfEnv('HF_AUTH_CODE').length}-character auth code — ` +
+      'check they are not swapped, that the key is switched on under Apps → Goodies → API, and that HF_ACCOUNT is your own HappyFox address.');
+  }
   if (res.status === 404) throw new Error('HappyFox API not found at ' + hfBaseUrl() + ' — check HF_ACCOUNT.');
   if (!res.ok) throw new Error(`HappyFox API error (HTTP ${res.status}).`);
   return res.json();
