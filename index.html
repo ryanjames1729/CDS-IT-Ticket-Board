@@ -910,6 +910,7 @@
         </div>
         <p style="font-size:0.78rem;color:#718096;line-height:1.5;margin:0 0 8px;" id="hfSourceText">Synced through the HappyFox API when it is configured, or from a CSV export.</p>
         <div style="font-size:0.72rem;color:#a0aec0;">Last synced: <span id="hfLastSync">—</span></div>
+        <div id="hfBreakdown" style="font-size:0.74rem;color:#4a5568;line-height:1.6;margin-top:10px;"></div>
       </div>
 
       <div style="background:#f7fafc;border-radius:10px;padding:16px 18px;border-left:3px solid #6264a7;">
@@ -1024,7 +1025,7 @@ function fmtDate(d) {
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-function updateSyncStatus(data, serverReachable) {
+function updateSyncStatus(data, serverReachable, loadError) {
   const dot = document.getElementById('syncDot'), label = document.getElementById('syncLabel');
   const header = document.getElementById('last-updated');
   const sample = document.getElementById('sampleBanner');
@@ -1038,6 +1039,12 @@ function updateSyncStatus(data, serverReachable) {
     document.getElementById('sampleBannerText').textContent = serverReachable
       ? ' Nothing has been synced so far — open Sync & Import to pull tickets from ConnectWise and HappyFox.'
       : ' Ticket data could not be loaded. Check that the server is running, then reload the page.';
+    if (loadError) {
+      label.textContent = 'Database error';
+      header.textContent = 'Stored tickets could not be loaded';
+      document.getElementById('sampleBannerTitle').textContent = 'Can’t load the stored tickets.';
+      document.getElementById('sampleBannerText').textContent = ` ${loadError} If this mentions Supabase, check that the Supabase project is running and that SUPABASE_URL and SUPABASE_SERVICE_KEY are correct on the server.`;
+    }
     return;
   }
 
@@ -1080,6 +1087,16 @@ function updateSyncPage(data) {
   showErr('cwLastError', data && data.cwLastError);
   showErr('teamsLastError', data && data.teamsLastError);
   showErr('hfLastError', data && data.hfLastError);
+
+  // What the HappyFox open count is made of — makes a mismatch with HappyFox easy to trace
+  const hfOpen = HF_TICKETS.filter(isHFOpen);
+  const parts = (label, keyFn) => {
+    const counts = Object.entries(tally(hfOpen, keyFn)).sort((a, b) => b[1] - a[1]);
+    return `<div><strong>By ${label}:</strong> ${counts.map(([k, n]) => `${esc(k)} ${n}`).join(' · ')}</div>`;
+  };
+  document.getElementById('hfBreakdown').innerHTML = !hfOpen.length ? '' :
+    `<div><strong>${hfOpen.length} open</strong> in the dashboard</div>` +
+    parts('category', t => t.category || 'No category') + parts('status', t => t.status || 'No status');
   const hfBtn = document.getElementById('hfSyncBtn');
   if (hfBtn && data) {
     hfBtn.style.display = meta.hfApiConfigured ? '' : 'none';
@@ -1149,7 +1166,7 @@ async function postSync(path, body) {
 }
 
 async function loadData() {
-  let data = null, reachable = false;
+  let data = null, reachable = false, loadError = '';
   try {
     const res = await fetch('/api/data', { signal: AbortSignal.timeout(15000) });
     if (res.status === 401 || res.status === 503) {
@@ -1159,6 +1176,7 @@ async function loadData() {
     }
     reachable = true;
     if (res.ok) data = await res.json();
+    else loadError = (await res.json().catch(() => ({}))).error || `The server returned an error (HTTP ${res.status}).`;
   } catch (_) { /* server not reachable */ }
 
   if (data) {
@@ -1169,7 +1187,11 @@ async function loadData() {
     HISTORY        = Array.isArray(data.history) ? data.history : [];
     SERVER_META    = data._server || null;
   }
-  updateSyncStatus(data || {}, reachable);
+  if (loadError) {
+    // The server answered but could not read the stored tickets (e.g. the database is unreachable)
+    CW_TICKETS = []; HF_TICKETS = []; NO_DATA = true;
+  }
+  updateSyncStatus(data || {}, reachable, loadError);
   updateSyncPage(data);
   initDashboard();
 }

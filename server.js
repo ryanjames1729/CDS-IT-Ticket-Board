@@ -336,7 +336,9 @@ app.post('/api/upload-hf', upload.single('csv'), async (req, res) => {
 // plus an API key and auth code from HappyFox → Apps → Goodies → API.
 // Reference: https://support.happyfox.com/kb/article/1039-tickets-endpoint
 
-const hfApiConfigured = () => !!(process.env.HF_ACCOUNT && process.env.HF_API_KEY && process.env.HF_AUTH_CODE);
+// Values pasted into a hosting dashboard often pick up stray spaces or quote marks
+const hfEnv = name => (process.env[name] || '').trim().replace(/^["']|["']$/g, '').trim();
+const hfApiConfigured = () => !!(hfEnv('HF_ACCOUNT') && hfEnv('HF_API_KEY') && hfEnv('HF_AUTH_CODE'));
 const HF_PAGE_SIZE = 50;        // the API's maximum
 const HF_MAX_PAGES = 100;       // safety stop: 5,000 tickets per request
 const HF_KEEP_CLOSED = 3000;    // closed tickets kept for the recurring-issue analysis
@@ -344,13 +346,13 @@ const HF_BACKFILL_DAYS = 90;    // closed history pulled on the first API sync
 let hfSyncRunning = false;
 
 function hfBaseUrl() {
-  const account = process.env.HF_ACCOUNT.trim().replace(/\/+$/, '');
-  if (/^https?:\/\//i.test(account)) return account;
+  // Accepts "school", "school.happyfox.com" or a full URL; anything after the host is dropped
+  const account = hfEnv('HF_ACCOUNT').replace(/^https?:\/\//i, '').split('/')[0];
   return `https://${account.includes('.') ? account : account + '.happyfox.com'}`;
 }
 
 async function hfGet(pathAndQuery, attempt = 1) {
-  const auth = Buffer.from(`${process.env.HF_API_KEY}:${process.env.HF_AUTH_CODE}`).toString('base64');
+  const auth = Buffer.from(`${hfEnv('HF_API_KEY')}:${hfEnv('HF_AUTH_CODE')}`).toString('base64');
   const res = await fetch(hfBaseUrl() + pathAndQuery, {
     headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
     signal: AbortSignal.timeout(30000),
@@ -363,7 +365,11 @@ async function hfGet(pathAndQuery, attempt = 1) {
     await new Promise(r => setTimeout(r, Math.min(wait, 30000)));
     return hfGet(pathAndQuery, attempt + 1);
   }
-  if (res.status === 401 || res.status === 403) throw new Error('HappyFox rejected the API key / auth code (HTTP ' + res.status + ').');
+  if (res.status === 401 || res.status === 403) {
+    throw new Error(`${new URL(hfBaseUrl()).host} rejected the API key / auth code (HTTP ${res.status}). ` +
+      `Sent a ${hfEnv('HF_API_KEY').length}-character key and a ${hfEnv('HF_AUTH_CODE').length}-character auth code — ` +
+      'check they are not swapped, that the key is switched on under Apps → Goodies → API, and that HF_ACCOUNT is your own HappyFox address.');
+  }
   if (res.status === 404) throw new Error('HappyFox API not found at ' + hfBaseUrl() + ' — check HF_ACCOUNT.');
   if (!res.ok) throw new Error(`HappyFox API error (HTTP ${res.status}).`);
   return res.json();
@@ -379,6 +385,12 @@ function hfTime(v) {
   return m ? `${m[1]}T${m[2]}Z` : String(v);
 }
 
+// Optional narrowing, both comma-separated and case-insensitive:
+//   HF_CATEGORIES       only keep tickets in these HappyFox categories (e.g. "IT")
+//   HF_IGNORE_STATUSES  treat these statuses as not open (e.g. "On Hold,Waiting on Parts")
+const hfList = name => new Set(hfEnv(name).split(',').map(v => v.trim().toLowerCase()).filter(Boolean));
+const hfInScope = t => { const cats = hfList('HF_CATEGORIES'); return !cats.size || cats.has((t.category || '').toLowerCase()); };
+
 function mapHfTicket(t) {
   const behavior = t.status && typeof t.status === 'object' ? String(t.status.behavior || '') : '';
   const status = hfName(t.status) || 'New';
@@ -392,7 +404,8 @@ function mapHfTicket(t) {
     created:  hfTime(t.created_at),
     updated:  hfTime(t.last_updated_at || t.last_modified),
     category: hfName(t.category),
-    closed:   behavior === 'completed' || HF_CLOSED_STATUSES.has(status.toLowerCase()),
+    closed:   behavior === 'completed' || HF_CLOSED_STATUSES.has(status.toLowerCase()) ||
+              hfList('HF_IGNORE_STATUSES').has(status.toLowerCase()),
     unresponded: t.unresponded === true,
     slaBreaches: Number(t.sla_breaches) || 0,
   };
@@ -404,7 +417,7 @@ async function fetchHappyFoxTickets(filter) {
   for (let page = 1; page <= HF_MAX_PAGES; page++) {
     const body = await hfGet(`/api/1.1/json/tickets/?${filter}&size=${HF_PAGE_SIZE}&page=${page}`);
     const rows = Array.isArray(body) ? body : (body.data || []);
-    tickets.push(...rows.map(mapHfTicket).filter(t => t.id && t.title));
+    tickets.push(...rows.map(mapHfTicket).filter(t => t.id && t.title && hfInScope(t)));
     const pageCount = body.page_info && body.page_info.page_count;
     if (!rows.length || (pageCount ? page >= pageCount : rows.length < HF_PAGE_SIZE)) break;
   }
@@ -425,6 +438,8 @@ async function runHfSync() {
     const data = await readData();
     const prev = { hf: data.hf };
     const fetched = new Set(tickets.map(t => t.id));
+    // Drop stored tickets that a newly added HF_CATEGORIES filter now excludes
+    data.hf = (data.hf || []).filter(t => data.hfSource !== 'api' || hfInScope(t));
 
     // First API sync: also pull recently closed tickets, so recurring issues show up straight away
     let history = (data.hf || []).filter(t => !fetched.has(t.id));
