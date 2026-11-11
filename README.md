@@ -55,6 +55,14 @@ Ticket data is stored in Supabase (one JSON row in the `dashboard_data` table, `
 | Teams | Button, or automatically alongside ConnectWise. |
 | HappyFox | Through the HappyFox API (optionally narrowed with `HF_CATEGORIES` and `HF_IGNORE_STATUSES`; the Sync page breaks the open count down by category and status) once `HF_ACCOUNT`, `HF_API_KEY` and `HF_AUTH_CODE` are set (create the key under Apps → Goodies → API; then button, or automatically). A CSV export (Reports → Ticket Export) still works as a fallback. |
 
+### Daily automatic sync
+
+`.github/workflows/daily-sync.yml` runs every weekday morning (about 5–6 AM Eastern) on GitHub. It tells the dashboard to sync
+every configured source, waits for it to finish, and fails — which makes GitHub email you —
+if any source reported an error. Setup: add the same long random value as `CRON_SECRET` on
+Render and as a repository secret named `CRON_SECRET` on GitHub (Settings → Secrets and
+variables → Actions). It can also be run by hand from the repository's Actions tab.
+
 `POST /api/sync-all` starts a sync of every configured source in the background and returns
 at once, so an outside scheduler can trigger it. The scheduler sends `CRON_SECRET` in an
 `x-cron-secret` header.

@@ -1,0 +1,83 @@
+# Refreshes the dashboard's ticket data every weekday morning, so nobody has to press the Sync buttons.
+#
+# It asks the dashboard to sync ConnectWise, HappyFox and Teams, waits for it to finish,
+# and fails (GitHub emails you) if any source reported an error.
+#
+# One-time setup:
+#   1. Pick a long random string.
+#   2. Render → the dashboard service → Environment → add CRON_SECRET with that value.
+#   3. GitHub → this repo → Settings → Secrets and variables → Actions → New repository
+#      secret → name CRON_SECRET, same value.
+#
+# Run it by hand any time from the Actions tab → "Daily ticket sync" → Run workflow.
+
+name: Daily ticket sync
+
+on:
+  schedule:
+    - cron: '10 10 * * 1-5'   # 10:10 UTC, Monday–Friday = 5:10 AM Eastern (6:10 AM during daylight time)
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: daily-ticket-sync
+  cancel-in-progress: false
+
+env:
+  DASHBOARD_URL: https://cds-it-dashboard.onrender.com
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Start the sync
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::The CRON_SECRET repository secret is not set. See the setup notes at the top of this workflow."
+            exit 1
+          fi
+          started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          echo "STARTED=$started" >> "$GITHUB_ENV"
+
+          # The free Render instance sleeps when idle and can take a minute to wake up
+          code=$(curl -sS -o response.json -w '%{http_code}' -X POST \
+            --retry 5 --retry-delay 20 --retry-all-errors --max-time 120 \
+            -H "x-cron-secret: $CRON_SECRET" "$DASHBOARD_URL/api/sync-all")
+          cat response.json; echo
+          case "$code" in
+            202) echo "Sync started." ;;
+            409) echo "A sync was already running; waiting for it." ;;
+            401) echo "::error::The dashboard rejected the secret. CRON_SECRET must be the same on Render and in this repository's secrets."; exit 1 ;;
+            *)   echo "::error::Unexpected response from the dashboard (HTTP $code)."; exit 1 ;;
+          esac
+
+      - name: Wait for it to finish and check the result
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          for attempt in $(seq 1 30); do
+            sleep 30
+            curl -sS --max-time 60 -H "x-cron-secret: $CRON_SECRET" "$DASHBOARD_URL/api/sync-status" -o status.json || continue
+            [ "$(jq -r '.syncing' status.json)" = "false" ] && break
+            echo "Still syncing… ($attempt)"
+          done
+
+          if [ "$(jq -r '.syncing' status.json)" != "false" ]; then
+            echo "::error::The sync did not finish within 15 minutes."
+            exit 1
+          fi
+
+          echo "Last successful sync per source:"
+          jq -r '.lastSync | to_entries[] | "  \(.key): \(.value // "never")"' status.json
+
+          # Only errors recorded during this run count as a failure
+          failed=$(jq -r --arg since "$STARTED" '.errors | to_entries[] | select(.value != null and ((.value.at | sub("\\.[0-9]+"; "") | fromdateiso8601) >= ($since | fromdateiso8601))) | "\(.key): \(.value.message)"' status.json)
+          if [ -n "$failed" ]; then
+            while IFS= read -r line; do echo "::error::$line"; done <<< "$failed"
+            exit 1
+          fi
+          echo "All sources synced without errors."

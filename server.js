@@ -14,6 +14,7 @@
  *   POST /api/sync-teams    → pulls messages from Teams chat via Graph API
  *   POST /api/sync-hf       → pulls tickets from the HappyFox API
  *   POST /api/sync-all      → starts a background ConnectWise + HappyFox + Teams sync (for cron jobs)
+ *   GET  /api/sync-status   → last sync times and errors (for the scheduler)
  *   POST /api/login         → exchanges the dashboard password for a session cookie
  *   POST /api/logout        → ends the session
  *
@@ -116,7 +117,7 @@ app.post('/api/logout', (req, res) => {
 // with the CRON_SECRET instead (x-cron-secret header).
 app.use('/api', (req, res, next) => {
   const cron = process.env.CRON_SECRET;
-  if (req.path === '/sync-all' && cron && safeEqual(req.get('x-cron-secret') || '', cron)) return next();
+  if ((req.path === '/sync-all' || req.path === '/sync-status') && cron && safeEqual(req.get('x-cron-secret') || '', cron)) return next();
   if (!PASSWORD) {
     return res.status(503).json({ success: false, code: 'not_configured', error: 'DASHBOARD_PASSWORD is not set on the server, so the dashboard is locked. Add it to the environment and restart.' });
   }
@@ -646,7 +647,18 @@ app.post('/api/sync-teams', async (req, res) => {
 const AUTO_SYNC_HOURS = Math.max(0, parseFloat(process.env.AUTO_SYNC_HOURS) || 0);
 let nextAutoSync = null;
 
+let syncAllRunning = false;
+
 async function syncEverything(reason) {
+  syncAllRunning = true;
+  try {
+    await syncEachSource(reason);
+  } finally {
+    syncAllRunning = false;
+  }
+}
+
+async function syncEachSource(reason) {
   console.log(`[auto-sync] Starting (${reason})…`);
   if (process.env.CW_USERNAME && process.env.CW_PASSWORD) {
     await runCwSync().catch(() => {});      // errors are logged and stored by runCwSync
@@ -673,9 +685,24 @@ function scheduleAutoSync() {
 // Kick off a background sync and return straight away (safe for cron services with short timeouts).
 // Callers need a signed-in session, or the CRON_SECRET in an x-cron-secret header.
 app.post('/api/sync-all', (req, res) => {
-  if (cwSyncRunning || hfSyncRunning) return res.status(409).json({ success: false, error: 'A sync is already running.' });
+  if (syncAllRunning || cwSyncRunning || hfSyncRunning) return res.status(409).json({ success: false, error: 'A sync is already running.' });
   syncEverything('sync-all request');
   res.status(202).json({ success: true, message: 'Sync started in the background.' });
+});
+
+// Lets a scheduler check how the background sync went: no ticket data, only times and errors.
+app.get('/api/sync-status', async (req, res) => {
+  try {
+    const d = await readData();
+    res.json({
+      success: true,
+      syncing: syncAllRunning || cwSyncRunning || hfSyncRunning,
+      lastSync: { connectwise: d.cwLastSync || null, happyfox: d.hfLastSync || null, teams: d.teamsLastSync || null },
+      errors: { connectwise: d.cwLastError || null, happyfox: d.hfLastError || null, teams: d.teamsLastError || null },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
