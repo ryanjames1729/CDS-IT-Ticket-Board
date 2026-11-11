@@ -1,4 +1,4 @@
-# Refreshes the dashboard's ticket data once a day, so nobody has to press the Sync buttons.
+# Refreshes the dashboard's ticket data every weekday morning, so nobody has to press the Sync buttons.
 #
 # It asks the dashboard to sync ConnectWise, HappyFox and Teams, waits for it to finish,
 # and fails (GitHub emails you) if any source reported an error.
@@ -15,7 +15,7 @@ name: Daily ticket sync
 
 on:
   schedule:
-    - cron: '10 10 * * *'   # 10:10 UTC every day = 5:10 AM Eastern (6:10 AM during daylight time)
+    - cron: '10 10 * * 1-5'   # 10:10 UTC, Monday–Friday = 5:10 AM Eastern (6:10 AM during daylight time)
   workflow_dispatch:
 
 permissions: {}

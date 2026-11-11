@@ -57,7 +57,7 @@ Ticket data is stored in Supabase (one JSON row in the `dashboard_data` table, `
 
 ### Daily automatic sync
 
-`.github/workflows/daily-sync.yml` runs once a day on GitHub. It tells the dashboard to sync
+`.github/workflows/daily-sync.yml` runs every weekday morning (about 5–6 AM Eastern) on GitHub. It tells the dashboard to sync
 every configured source, waits for it to finish, and fails — which makes GitHub email you —
 if any source reported an error. Setup: add the same long random value as `CRON_SECRET` on
 Render and as a repository secret named `CRON_SECRET` on GitHub (Settings → Secrets and
